@@ -17,7 +17,7 @@ impl OffsetGroup {
             .enumerate()
             .map(|(i, offset)| (*offset, i))
             .collect();
-        let offsets = offsets.iter().cloned().collect();
+        let offsets = offsets.to_vec();
 
         OffsetGroup {
             offsets,
