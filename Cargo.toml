@@ -12,6 +12,7 @@ path = "src/lib.rs"
 debug = true
 
 [dependencies]
+ctrlc = "*"
 dot_vox = "*"
 env_logger = "*"
 hibitset = "*"

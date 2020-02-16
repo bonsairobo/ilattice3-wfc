@@ -6,6 +6,8 @@ use image::{self, gif, Delay, Frame};
 use log::{error, info};
 use std::fs::File;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 #[derive(structopt::StructOpt)]
 struct Args {
@@ -41,11 +43,22 @@ struct Args {
 
 #[paw::main]
 fn main(args: Args) -> Result<(), std::io::Error> {
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || r.store(false, Ordering::SeqCst))
+        .expect("Failed to register SIGINT handler");
+
     env_logger::init();
 
     let input = process_args(&args);
 
-    generate(args, input)
+    generate(args, input, running)?;
+
+    // We want to dump the flame graph, even in a SIGINT event.
+    // info!("Writing flame-graph.html");
+    // flame::dump_html(&mut File::create("flame-graph.html").unwrap()).unwrap();
+
+    Ok(())
 }
 
 struct ProcessedInput<I> {
@@ -58,12 +71,20 @@ struct ProcessedInput<I> {
 
 fn process_args(args: &Args) -> ProcessedInput<PeriodicYLevelsIndexer> {
     let indexer = PeriodicYLevelsIndexer {};
-    let pattern_size = lat::Point::from(get_three_elements(&args.pattern_size));
-    let output_size = lat::Point::from(get_three_elements(&args.output_size));
 
     let mut seed = [0; 32];
     let seed_bytes = args.seed.as_bytes();
     seed[..seed_bytes.len()].clone_from_slice(seed_bytes);
+
+    if args.pattern_size.len() != 3 {
+        panic!("Pattern size must specify 3 dimensions");
+    }
+    if args.output_size.len() != 3 {
+        panic!("Output size must specify 3 dimensions");
+    }
+
+    let pattern_size = lat::Point::from(get_three_elements(&args.pattern_size));
+    let output_size = lat::Point::from(get_three_elements(&args.output_size));
 
     let extension = args
         .input_path
@@ -83,8 +104,14 @@ fn process_args(args: &Args) -> ProcessedInput<PeriodicYLevelsIndexer> {
             3,
         )
     } else {
-        assert_eq!(pattern_size.z, 1, "3D images not supported");
-        assert_eq!(output_size.z, 1, "3D images not supported");
+        assert_eq!(
+            pattern_size.z, 1,
+            "3D images not supported, use --pattern-size x y 1"
+        );
+        assert_eq!(
+            output_size.z, 1,
+            "3D images not supported, use --output-size x y 1"
+        );
         let input_img = image::open(args.input_path.as_os_str()).unwrap();
 
         (
@@ -119,6 +146,7 @@ fn get_three_elements(v: &[i32]) -> [i32; 3] {
 fn generate(
     args: Args,
     input: ProcessedInput<PeriodicYLevelsIndexer>,
+    running: Arc<AtomicBool>,
 ) -> Result<(), std::io::Error> {
     let ProcessedInput {
         input_lattice,
@@ -156,6 +184,11 @@ fn generate(
                 break;
             }
             UpdateResult::Continue => (),
+        }
+        // Can be interrupted by other threads.
+        if !running.load(Ordering::SeqCst) {
+            success = false;
+            break;
         }
 
         if args.gif.is_some() {

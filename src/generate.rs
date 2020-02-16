@@ -1,4 +1,7 @@
-use crate::pattern::{PatternId, PatternSet};
+use crate::{
+    offset::OffsetId,
+    pattern::{PatternId, PatternSet},
+};
 
 use hibitset::{BitSet, BitSetLike};
 use ilattice3 as lat;
@@ -35,7 +38,7 @@ impl Generator {
     }
 
     pub fn update(&mut self, patterns: &PatternSet) -> UpdateResult {
-        let (slot, entropy) = self.wave.choose_lowest_entropy_slot(&mut self.rng);
+        let (slot, entropy) = { self.wave.choose_lowest_entropy_slot(&mut self.rng) };
         debug!(
             "{} candidate patterns remaining; chose slot {} with entropy {}",
             self.wave.remaining_pattern_count, slot, entropy
@@ -61,7 +64,12 @@ impl Generator {
     }
 
     /// Returns `false` iff we find a slot with no possible patterns.
-    fn propagate_constraints(&mut self, patterns: &PatternSet, changed_slot: lat::Point) -> bool {
+    // #[measure([ResponseTime, Throughput])]
+    fn propagate_constraints(
+        &mut self,
+        pattern_set: &PatternSet,
+        changed_slot: lat::Point,
+    ) -> bool {
         let mut slots_to_visit = BTreeSet::new();
         // Point is not Ord, so just do a no-op conversion for this container.
         slots_to_visit.insert(<[i32; 3]>::from(changed_slot));
@@ -72,41 +80,23 @@ impl Generator {
         while !slots_to_visit.is_empty() {
             let visit_slot: lat::Point = slots_to_visit.pop_last().unwrap().into();
 
-            for (offset_id, offset) in patterns.constraints.offset_group.iter() {
+            for (offset_id, offset) in pattern_set.constraints.offset_group.iter() {
                 // Make sure we don't index out of bounds.
                 let offset_slot = visit_slot + *offset;
                 if !self.wave.slots.get_extent().contains_world(&offset_slot) {
                     continue;
                 }
 
-                // See if the set of possible patterns at `offset_slot` has changed.
-                let possible_offset_patterns = self.wave.slots.get_world(&offset_slot);
-                impossible_patterns.clear();
-                for offset_pattern in possible_offset_patterns.iter() {
-                    // `pattern` is not possible if it's not compatible with any of the
-                    // possibilities at `visit_slot`.
-                    let possible_visit_slot_patterns = self.wave.slots.get_world(&visit_slot);
-                    let still_possible = possible_visit_slot_patterns.iter().any(|visit_pattern| {
-                        patterns.constraints.compatible(
-                            offset_id,
-                            PatternId(visit_pattern),
-                            PatternId(offset_pattern),
-                        )
-                    });
-                    if !still_possible {
-                        impossible_patterns.push(offset_pattern);
-                    }
-                }
-
-                for remove_pattern in impossible_patterns.iter() {
-                    self.wave
-                        .remove_pattern(patterns, &offset_slot, PatternId(*remove_pattern));
-                }
-
-                let possible_offset_patterns = self.wave.slots.get_world(&offset_slot);
-                if possible_offset_patterns.is_empty() {
-                    warn!("No possible patterns for {}", offset_slot);
+                let any_possible = self.remove_impossible_patterns(
+                    pattern_set,
+                    &visit_slot,
+                    &offset_slot,
+                    offset_id,
+                    &mut impossible_patterns,
+                );
+                if !any_possible {
                     // Failed to fully assign the output lattice. Give up.
+                    warn!("No possible patterns for {}", offset_slot);
                     return false;
                 }
 
@@ -118,6 +108,44 @@ impl Generator {
         }
 
         true
+    }
+
+    fn remove_impossible_patterns(
+        &mut self,
+        pattern_set: &PatternSet,
+        visit_slot: &lat::Point,
+        offset_slot: &lat::Point,
+        offset_id: OffsetId,
+        impossible_patterns: &mut Vec<u32>,
+    ) -> bool {
+        impossible_patterns.clear();
+
+        // See if the set of possible patterns at `offset_slot` has changed.
+        let possible_offset_patterns = self.wave.slots.get_world(&offset_slot);
+        for offset_pattern in possible_offset_patterns.iter() {
+            // `pattern` is not possible if it's not compatible with any of the possibilities at
+            // `visit_slot`.
+            let possible_visit_slot_patterns = self.wave.slots.get_world(&visit_slot);
+            let still_possible = possible_visit_slot_patterns.iter().any(|visit_pattern| {
+                pattern_set.constraints.compatible(
+                    offset_id,
+                    PatternId(visit_pattern),
+                    PatternId(offset_pattern),
+                )
+            });
+            if !still_possible {
+                impossible_patterns.push(offset_pattern);
+            }
+        }
+
+        for remove_pattern in impossible_patterns.iter() {
+            self.wave
+                .remove_pattern(pattern_set, &offset_slot, PatternId(*remove_pattern));
+        }
+
+        let possible_offset_patterns = self.wave.slots.get_world(&offset_slot);
+
+        !possible_offset_patterns.is_empty()
     }
 }
 
