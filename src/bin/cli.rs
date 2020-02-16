@@ -54,10 +54,6 @@ fn main(args: Args) -> Result<(), std::io::Error> {
 
     generate(args, input, running)?;
 
-    // We want to dump the flame graph, even in a SIGINT event.
-    // info!("Writing flame-graph.html");
-    // flame::dump_html(&mut File::create("flame-graph.html").unwrap()).unwrap();
-
     Ok(())
 }
 
