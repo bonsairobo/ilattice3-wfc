@@ -65,11 +65,17 @@ fn process_args(args: &Args) -> ProcessedInput<PeriodicYLevelsIndexer> {
     let seed_bytes = args.seed.as_bytes();
     seed[..seed_bytes.len()].clone_from_slice(seed_bytes);
 
-    let extension = args.input_path.extension().expect("Input file has no extention");
+    let extension = args
+        .input_path
+        .extension()
+        .expect("Input file has no extention");
     let (input_lattice, offset_group, num_dimensions) = if extension == "vox" {
-        assert!(args.palette.is_none(), "Palette image only supported for 2D images");
-        let input_vox = dot_vox::load(args.input_path.to_str().unwrap())
-            .expect("Failed to load VOX file");
+        assert!(
+            args.palette.is_none(),
+            "Palette image only supported for 2D images"
+        );
+        let input_vox =
+            dot_vox::load(args.input_path.to_str().unwrap()).expect("Failed to load VOX file");
 
         (
             Lattice::from_vox_with_indexer(indexer, &input_vox, 0),
@@ -111,7 +117,8 @@ fn get_three_elements(v: &[i32]) -> [i32; 3] {
 }
 
 fn generate(
-    args: Args, input: ProcessedInput<PeriodicYLevelsIndexer>
+    args: Args,
+    input: ProcessedInput<PeriodicYLevelsIndexer>,
 ) -> Result<(), std::io::Error> {
     let ProcessedInput {
         input_lattice,
@@ -181,7 +188,9 @@ fn generate(
         let colors = color_final_patterns(&result, &pattern_colors);
         let final_img = image_from_lattice(&colors);
         info!("Writing {:?}", args.output_path);
-        final_img.save(args.output_path).expect("Failed to save output image");
+        final_img
+            .save(args.output_path)
+            .expect("Failed to save output image");
     }
 
     Ok(())

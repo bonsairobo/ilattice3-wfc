@@ -9,7 +9,7 @@ mod pattern;
 
 pub use crate::image::{
     color_final_patterns, color_superposition, image_from_lattice, lattice_from_image,
-    make_palette_lattice
+    make_palette_lattice,
 };
 pub use generate::{Generator, UpdateResult};
 pub use offset::{edge_2d_offsets, face_3d_offsets, OffsetGroup};
