@@ -1,5 +1,5 @@
 use crate::{
-    offset::{OffsetGroup, OffsetId},
+    offset::{OffsetGroup, OffsetId, OffsetMap},
     static_vec::{Id, StaticVec},
 };
 
@@ -24,6 +24,7 @@ pub struct PatternGroup {
     pub(crate) constraints: SymmetricPatternConstraints,
 }
 
+// TODO: reduce to u16; we should never need more than 65536 patterns
 /// Represents one of the possible patterns.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PatternId(pub u32);
@@ -160,7 +161,7 @@ where
 
 pub type PatternRepresentatives = PatternMap<lat::Extent>;
 
-/// Enforces symmetry of the `compatible` relation.
+/// Used to build the set of pattern relations. Enforces symmetry of the `compatible` relation.
 pub struct SymmetricPatternConstraints {
     constraints: PatternMap<PatternConstraints>,
     pub(crate) offset_group: OffsetGroup,
@@ -180,7 +181,7 @@ impl SymmetricPatternConstraints {
     fn assert_valid(&self) {
         for (_, c) in self.constraints.iter() {
             for i in 0..self.offset_group.num_offsets() {
-                assert!(!c.allowed_adjacent_patterns[i].is_empty());
+                assert!(!c.allowed_adjacent_patterns.get(OffsetId(i)).is_empty());
             }
         }
     }
@@ -198,7 +199,11 @@ impl SymmetricPatternConstraints {
         pattern: PatternId,
         offset_pattern: PatternId,
     ) -> bool {
-        self.constraints.get(pattern).allowed_adjacent_patterns[offset.0].contains(offset_pattern.0)
+        self.constraints
+            .get(pattern)
+            .allowed_adjacent_patterns
+            .get(offset)
+            .contains(offset_pattern.0)
     }
 
     pub fn add_compatible_patterns(
@@ -208,29 +213,68 @@ impl SymmetricPatternConstraints {
         offset_pattern: PatternId,
     ) {
         let offset_id = self.offset_group.offset_id(offset);
-        self.constraints.get_mut(pattern).allowed_adjacent_patterns[offset_id.0]
+        self.constraints
+            .get_mut(pattern)
+            .allowed_adjacent_patterns
+            .get_mut(offset_id)
             .add(offset_pattern.0);
 
         let opposite_id = self.offset_group.offset_id(&-*offset);
         self.constraints
             .get_mut(offset_pattern)
-            .allowed_adjacent_patterns[opposite_id.0]
+            .allowed_adjacent_patterns.get_mut(opposite_id)
             .add(pattern.0);
+    }
+
+    /// For a fully undetermined `Wave`, return the support map for one slot.
+    pub fn get_initial_support(&self) -> PatternMap<PatternSupport> {
+        let pattern_supports = self.constraints.iter().map(|(_pattern, constraints)| {
+            let mut counts = OffsetMap::fill(0, self.offset_group.num_offsets());
+            constraints.allowed_adjacent_patterns.iter().for_each(|(offset, patterns)| {
+                *counts.get_mut(offset) = patterns.iter().count() as u32;
+            });
+
+            PatternSupport::new(counts)
+        }).collect();
+
+        PatternMap::new(pattern_supports)
     }
 }
 
 /// At each offset, the set of patterns that are compatible with another pattern.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct PatternConstraints {
-    // Stored in the same order as `OVERLAP_OFFSETS` for efficiency.
-    allowed_adjacent_patterns: Vec<BitSet>,
+    allowed_adjacent_patterns: OffsetMap<BitSet>,
 }
 
 impl PatternConstraints {
     fn new(num_offsets: usize) -> Self {
         PatternConstraints {
-            allowed_adjacent_patterns: vec![BitSet::new(); num_offsets],
+            allowed_adjacent_patterns: OffsetMap::fill(BitSet::new(), num_offsets),
         }
+    }
+}
+
+/// A dynamic structure that tracks, for a pattern P (in some slot), how many patterns are
+/// compatible with P at each offset. Once no patterns are compatible with P at some offset, P
+/// is not possible.
+#[derive(Clone)]
+pub struct PatternSupport {
+    counts: OffsetMap<u32>,
+}
+
+impl PatternSupport {
+    fn new(counts: OffsetMap<u32>) -> Self {
+        PatternSupport { counts }
+    }
+
+    /// Returns `true` iff `pattern` no longer gives any support.
+    pub fn remove_support(&mut self, offset: OffsetId) -> bool {
+        let count = self.counts.get_mut(offset);
+        debug_assert!(*count > 0);
+        *count -= 1;
+
+        *count == 0
     }
 }
 
@@ -243,4 +287,4 @@ pub fn find_pattern_colors<I: LatticeIndexer>(
     representatives.map(|e| unsafe { std::mem::transmute(*lattice.get_local(&e.get_minimum())) })
 }
 
-type PatternMap<T> = StaticVec<PatternId, T>;
+pub type PatternMap<T> = StaticVec<PatternId, T>;

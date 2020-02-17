@@ -1,4 +1,6 @@
-use crate::pattern::{PatternGroup, PatternId};
+use crate::{
+    pattern::{PatternGroup, PatternId, PatternMap, PatternSupport},
+};
 
 use hibitset::{BitSet, BitSetLike};
 use ilattice3 as lat;
@@ -12,6 +14,11 @@ pub struct Wave {
     slots: Lattice<BitSet>,
     entropy_cache: Lattice<SlotEntropyCache>,
     remaining_pattern_count: u32,
+
+    /// Probably the most complex part of the wave. This is an important optimization that captures
+    /// each pattern's remaining support in each direction. Once a given pattern P, for any offset,
+    /// has no supporting patterns at that offset, P is no longer possible.
+    pattern_supports: Lattice<PatternMap<PatternSupport>>,
 }
 
 impl Wave {
@@ -31,10 +38,14 @@ impl Wave {
         debug!("Initial entropy = {:?}", initial_entropy);
         let entropy_cache = Lattice::fill(extent, initial_entropy);
 
+        let initial_supports = pattern_group.constraints.get_initial_support();
+        let pattern_supports = Lattice::fill(extent, initial_supports);
+
         Wave {
             slots,
             remaining_pattern_count,
             entropy_cache,
+            pattern_supports,
         }
     }
 
