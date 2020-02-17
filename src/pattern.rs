@@ -21,7 +21,7 @@ pub struct PatternGroup {
     /// Count of each pattern in the source lattice. Equivalently, a prior distribution of patterns.
     weights: PatternMap<u32>,
     /// One set of constraints for each pattern.
-    pub(crate) constraints: SymmetricPatternConstraints,
+    constraints: SymmetricPatternConstraints,
 }
 
 /// Represents one of the possible patterns.
@@ -57,6 +57,14 @@ impl PatternGroup {
         me
     }
 
+    pub fn get_offset_group(&self) -> &OffsetGroup {
+        &self.constraints.offset_group
+    }
+
+    pub fn get_initial_support(&self) -> PatternMap<PatternSupport> {
+        self.constraints.get_initial_support()
+    }
+
     pub fn assert_valid(&self) {
         assert!(self.weights.num_elements() as u16 == self.constraints.num_patterns());
         self.constraints.assert_valid();
@@ -69,6 +77,12 @@ impl PatternGroup {
 
     pub fn num_patterns(&self) -> u16 {
         self.weights.num_elements() as u16
+    }
+
+    pub fn iter_compatible(
+        &self, pattern: PatternId, offset: OffsetId
+    ) -> impl Iterator<Item = PatternId> + '_ {
+        self.constraints.iter_compatible(pattern, offset)
     }
 
     /// Sample the possible patterns by their probability (weights) in the source data.
@@ -166,7 +180,7 @@ pub type PatternRepresentatives = PatternMap<lat::Extent>;
 /// Used to build the set of pattern relations. Enforces symmetry of the `compatible` relation.
 pub struct SymmetricPatternConstraints {
     constraints: PatternMap<OffsetMap<BitSet>>,
-    pub(crate) offset_group: OffsetGroup,
+    offset_group: OffsetGroup,
     num_patterns: u16,
 }
 
@@ -229,8 +243,8 @@ impl SymmetricPatternConstraints {
             PatternSupport { counts: OffsetMap::fill(0, self.offset_group.num_offsets()) },
             self.num_patterns() as usize
         );
-        for pattern in (0..self.num_patterns()).map(|p| PatternId(p)) {
-            for offset in (0..self.offset_group.num_offsets()).map(|o| OffsetId(o)) {
+        for pattern in (0..self.num_patterns()).map(PatternId) {
+            for offset in (0..self.offset_group.num_offsets()).map(OffsetId) {
                 // If P1 allows P2 to be at offset, then P2 allows P1 to be at -offset.
                 *pattern_supports.get_mut(pattern).counts.get_mut(offset) =
                     self.num_compatible(pattern, self.offset_group.opposite(offset)) as i32;

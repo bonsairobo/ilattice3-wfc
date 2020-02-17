@@ -57,8 +57,6 @@ fn main(args: Args) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-pub const NUM_SEED_BYTES: usize = 16;
-
 struct ProcessedInput<I> {
     input_lattice: Lattice<u32, I>,
     pattern_shape: PatternShape,
