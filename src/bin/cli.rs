@@ -155,9 +155,9 @@ fn generate(
     info!("Trying to generate with seed {:?}", seed);
 
     info!("Finding patterns in lattice");
-    let (pattern_set, representatives) =
+    let (pattern_group, representatives) =
         process_patterns_in_lattice(&input_lattice, &pattern_shape);
-    info!("# patterns = {}", pattern_set.num_patterns());
+    info!("# patterns = {}", pattern_group.num_patterns());
 
     if let Some(palette_path) = args.palette {
         // Save the palette image for debugging.
@@ -168,12 +168,12 @@ fn generate(
 
     let pattern_colors = find_pattern_colors(&input_lattice, &representatives);
 
-    let mut generator = Generator::new(seed, output_size, &pattern_set);
+    let mut generator = Generator::new(seed, output_size, &pattern_group);
     let mut frames = Vec::new();
     let mut success = true;
     println!("Starting generator");
     loop {
-        match generator.update(&pattern_set) {
+        match generator.update(&pattern_group) {
             UpdateResult::Success => break,
             UpdateResult::Failure => {
                 error!("Failed to generate");

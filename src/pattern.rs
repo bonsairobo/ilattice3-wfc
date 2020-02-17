@@ -24,10 +24,11 @@ pub struct PatternGroup {
     pub(crate) constraints: SymmetricPatternConstraints,
 }
 
-// TODO: reduce to u16; we should never need more than 65536 patterns
 /// Represents one of the possible patterns.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PatternId(pub u32);
+pub struct PatternId(pub u16);
+
+pub const MAX_PATTERNS: u16 = std::u16::MAX;
 
 impl Into<usize> for PatternId {
     fn into(self) -> usize {
@@ -37,13 +38,13 @@ impl Into<usize> for PatternId {
 
 impl From<usize> for PatternId {
     fn from(other: usize) -> PatternId {
-        PatternId(other as u32)
+        PatternId(other as u16)
     }
 }
 
 impl Id for PatternId {}
 
-const EMPTY_PATTERN_ID: PatternId = PatternId(std::u32::MAX);
+const EMPTY_PATTERN_ID: PatternId = PatternId(std::u16::MAX);
 
 impl PatternGroup {
     pub fn new(weights: PatternMap<u32>, constraints: SymmetricPatternConstraints) -> Self {
@@ -57,7 +58,7 @@ impl PatternGroup {
     }
 
     pub fn assert_valid(&self) {
-        assert!(self.weights.num_elements() as u32 == self.constraints.num_patterns());
+        assert!(self.weights.num_elements() as u16 == self.constraints.num_patterns());
         self.constraints.assert_valid();
     }
 
@@ -66,8 +67,8 @@ impl PatternGroup {
         *self.weights.get(id)
     }
 
-    pub fn num_patterns(&self) -> u32 {
-        self.weights.num_elements() as u32
+    pub fn num_patterns(&self) -> u16 {
+        self.weights.num_elements() as u16
     }
 
     /// Sample the possible patterns by their probability (weights) in the source data.
@@ -133,8 +134,11 @@ where
 
     // Set the constraints and count pattern occurences.
     let num_patterns = patterns.len();
+    if num_patterns > MAX_PATTERNS as usize {
+        panic!("Too many patterns ({}), maximum is {}", num_patterns, MAX_PATTERNS);
+    }
     let mut pattern_constraints =
-        SymmetricPatternConstraints::new(pattern_shape.offset_group.clone(), num_patterns as u32);
+        SymmetricPatternConstraints::new(pattern_shape.offset_group.clone(), num_patterns as u16);
     for pattern_point in full_extent.into_iter() {
         let pattern = *pattern_lattice.get_local(&pattern_point);
         debug_assert!(pattern != EMPTY_PATTERN_ID);
@@ -149,10 +153,10 @@ where
         }
     }
 
-    let pattern_set = PatternGroup::new(pattern_weights, pattern_constraints);
+    let pattern_group = PatternGroup::new(pattern_weights, pattern_constraints);
 
     (
-        pattern_set,
+        pattern_group,
         PatternRepresentatives::new(pattern_representatives),
     )
 }
@@ -163,11 +167,11 @@ pub type PatternRepresentatives = PatternMap<lat::Extent>;
 pub struct SymmetricPatternConstraints {
     constraints: PatternMap<OffsetMap<BitSet>>,
     pub(crate) offset_group: OffsetGroup,
-    num_patterns: u32,
+    num_patterns: u16,
 }
 
 impl SymmetricPatternConstraints {
-    pub fn new(offset_group: OffsetGroup, num_patterns: u32) -> Self {
+    pub fn new(offset_group: OffsetGroup, num_patterns: u16) -> Self {
         Self {
             constraints: PatternMap::fill(
                 OffsetMap::fill(BitSet::new(), offset_group.num_offsets()),
@@ -186,18 +190,18 @@ impl SymmetricPatternConstraints {
         }
     }
 
-    pub fn num_patterns(&self) -> u32 {
+    pub fn num_patterns(&self) -> u16 {
         self.num_patterns
     }
 
     pub fn iter_compatible(
         &self, pattern: PatternId, offset: OffsetId
     ) -> impl Iterator<Item = PatternId> + '_ {
-        self.constraints.get(pattern).get(offset).iter().map(|i| PatternId(i))
+        self.constraints.get(pattern).get(offset).iter().map(|i| PatternId(i as u16))
     }
 
-    pub fn num_compatible(&self, pattern: PatternId, offset: OffsetId) -> u32 {
-        self.iter_compatible(pattern, offset).count() as u32
+    pub fn num_compatible(&self, pattern: PatternId, offset: OffsetId) -> u16 {
+        self.iter_compatible(pattern, offset).count() as u16
     }
 
     pub fn add_compatible_patterns(
@@ -210,13 +214,13 @@ impl SymmetricPatternConstraints {
         self.constraints
             .get_mut(pattern)
             .get_mut(offset_id)
-            .add(offset_pattern.0);
+            .add(offset_pattern.0 as u32);
 
         let opposite_id = self.offset_group.offset_id(&-*offset);
         self.constraints
             .get_mut(offset_pattern)
             .get_mut(opposite_id)
-            .add(pattern.0);
+            .add(pattern.0 as u32);
     }
 
     /// For a fully undetermined `Wave`, return the support map for one slot.
@@ -273,14 +277,14 @@ pub type PatternMap<T> = StaticVec<PatternId, T>;
 #[derive(Clone)]
 pub struct PatternSet {
     bits: BitSet,
-    size: u32,
+    size: u16,
 }
 
 impl PatternSet {
-    pub fn all(num_patterns: u32) -> Self {
-        let mut bits = BitSet::with_capacity(num_patterns);
+    pub fn all(num_patterns: u16) -> Self {
+        let mut bits = BitSet::with_capacity(num_patterns as u32);
         for i in 0..num_patterns {
-            bits.add(i);
+            bits.add(i as u32);
         }
 
         PatternSet {
@@ -288,17 +292,17 @@ impl PatternSet {
         }
     }
 
-    pub fn len(&self) -> u32 {
+    pub fn len(&self) -> u16 {
         self.size
     }
 
     pub fn remove(&mut self, pattern: PatternId) {
-        self.bits.remove(pattern.0);
+        self.bits.remove(pattern.0 as u32);
         self.size -= 1;
     }
 
     pub fn iter(&self) -> impl Iterator<Item = PatternId> + '_ {
-        (&self.bits).iter().map(|i| PatternId(i))
+        (&self.bits).iter().map(|i| PatternId(i as u16))
     }
 
     pub fn is_empty(&self) -> bool {

@@ -8,9 +8,9 @@ edition = "2018"
 name = "ilattice3_wfc"
 path = "src/lib.rs"
 
-# [profile.release]
-# debug = true
-# opt-level = 1
+[profile.release]
+debug = true
+opt-level = 1
 
 [dependencies]
 ctrlc = "*"

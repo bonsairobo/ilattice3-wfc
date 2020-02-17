@@ -12,7 +12,7 @@ use rand::prelude::*;
 pub struct Wave {
     slots: Lattice<PatternSet>,
     entropy_cache: Lattice<SlotEntropyCache>,
-    remaining_pattern_count: u32,
+    remaining_pattern_count: usize,
 
     /// Probably the most complex part of the wave. This is an important optimization that captures
     /// each pattern's remaining support in each direction. Once a given pattern P, for any offset,
@@ -28,7 +28,7 @@ impl Wave {
         let extent = lat::Extent::from_min_and_world_supremum([0, 0, 0].into(), output_size);
         let slots = Lattice::fill(extent, all_possible.clone());
         let remaining_pattern_count =
-            slots.get_extent().volume() as u32 * pattern_group.num_patterns();
+            slots.get_extent().volume() * pattern_group.num_patterns() as usize;
 
         let initial_entropy = slot_entropy(pattern_group, &all_possible);
         debug!("Initial entropy = {:?}", initial_entropy);
@@ -45,14 +45,15 @@ impl Wave {
         }
     }
 
-    pub fn get_remaining_pattern_count(&self) -> u32 {
+    pub fn get_remaining_pattern_count(&self) -> usize {
         self.remaining_pattern_count
     }
 
     pub fn determined(&self) -> bool {
-        self.remaining_pattern_count == self.slots.get_extent().volume() as u32
+        self.remaining_pattern_count == self.slots.get_extent().volume()
     }
 
+    // TODO: optimize sampling
     pub fn choose_lowest_entropy_slot<R: Rng>(&self, rng: &mut R) -> (lat::Point, f32) {
         self.entropy_cache
             .get_extent()
