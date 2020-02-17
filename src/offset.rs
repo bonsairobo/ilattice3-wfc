@@ -6,7 +6,7 @@ use std::collections::HashMap;
 #[derive(Clone)]
 pub struct OffsetGroup {
     offsets: OffsetMap<lat::Point>,
-    offset_index: HashMap<lat::Point, usize>,
+    offset_index: HashMap<lat::Point, OffsetId>,
 }
 
 impl OffsetGroup {
@@ -14,10 +14,10 @@ impl OffsetGroup {
     pub fn new(offsets: &[lat::Point]) -> Self {
         // Build the index so users can provide `lat::Point` offsets instead of `OffsetId`s when
         // convenient.
-        let offset_index: HashMap<lat::Point, usize> = offsets
+        let offset_index: HashMap<lat::Point, OffsetId> = offsets
             .iter()
             .enumerate()
-            .map(|(i, offset)| (*offset, i))
+            .map(|(i, offset)| (*offset, OffsetId(i)))
             .collect();
         let offsets = OffsetMap::new(offsets.to_vec());
 
@@ -28,16 +28,14 @@ impl OffsetGroup {
     }
 
     pub fn num_offsets(&self) -> usize {
-        self.offset_index.len()
+        self.offsets.num_elements()
     }
 
     pub fn offset_id(&self, offset: &lat::Point) -> OffsetId {
-        OffsetId(
-            *self
-                .offset_index
-                .get(offset)
-                .unwrap_or_else(|| panic!("Got offset {}", offset)),
-        )
+        *self
+            .offset_index
+            .get(offset)
+            .unwrap_or_else(|| panic!("Got offset {}", offset))
     }
 
     pub fn opposite(&self, offset: OffsetId) -> OffsetId {
