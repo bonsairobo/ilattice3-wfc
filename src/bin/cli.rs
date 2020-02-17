@@ -33,13 +33,15 @@ struct Args {
     seed: String,
 
     /// Produce an animated GIF showing each update of the generator algorithm.
-    #[structopt(parse(from_os_str))]
+    #[structopt(short, long, parse(from_os_str))]
     gif: Option<PathBuf>,
 
     /// Path where the pattern palette image should be saved. Only supported for 2D images.
-    #[structopt(parse(from_os_str))]
+    #[structopt(short, long, parse(from_os_str))]
     palette: Option<PathBuf>,
 }
+
+const MAX_FRAMES: usize = 300;
 
 #[paw::main]
 fn main(args: Args) -> Result<(), std::io::Error> {
