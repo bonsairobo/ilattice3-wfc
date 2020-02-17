@@ -37,10 +37,14 @@ impl Generator {
         })
     }
 
+    pub fn get_remaining_pattern_count(&self) -> usize {
+        self.wave.get_remaining_pattern_count()
+    }
+
     pub fn update(&mut self, pattern_group: &PatternGroup) -> UpdateResult {
-        let (slot, entropy) = self.wave.choose_lowest_entropy_slot(&mut self.rng);
+        let (slot, entropy) = self.wave.choose_least_entropy_slot(&mut self.rng);
         debug!(
-            "{} candidate patterns remaining; chose slot {} with entropy {}",
+            "{} candidate patterns remaining; chose slot {} with least entropy {}",
             self.wave.get_remaining_pattern_count(), slot, entropy
         );
 

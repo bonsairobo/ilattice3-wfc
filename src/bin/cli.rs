@@ -3,7 +3,7 @@ use ilattice3_wfc::*;
 use ilattice3 as lat;
 use ilattice3::{Lattice, PeriodicYLevelsIndexer};
 use image::{self, gif, Delay, Frame};
-use log::{error, info};
+use indicatif::ProgressBar;
 use std::fs::File;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -36,12 +36,18 @@ struct Args {
     #[structopt(short, long, parse(from_os_str))]
     gif: Option<PathBuf>,
 
+    /// Take one GIF frame for every N updates of the generator.
+    #[structopt(short, long, default_value = "1")]
+    skip_frames: usize,
+
     /// Path where the pattern palette image should be saved. Only supported for 2D images.
     #[structopt(short, long, parse(from_os_str))]
     palette: Option<PathBuf>,
-}
 
-const MAX_FRAMES: usize = 300;
+    /// A log config string, e.g. "info" or "debug, module = trace".
+    #[structopt(short, long)]
+    log: Option<String>,
+}
 
 #[paw::main]
 fn main(args: Args) -> Result<(), std::io::Error> {
@@ -50,7 +56,12 @@ fn main(args: Args) -> Result<(), std::io::Error> {
     ctrlc::set_handler(move || r.store(false, Ordering::SeqCst))
         .expect("Failed to register SIGINT handler");
 
-    env_logger::init();
+    if let Some(log_config) = &args.log {
+        flexi_logger::Logger::with_str(log_config.as_str())
+            .log_to_file()
+            .start()
+            .unwrap_or_else(|e| panic!("Logger initialization failed with {}", e));
+    }
 
     let input = process_args(&args);
 
@@ -154,12 +165,12 @@ fn generate(
         num_dimensions,
     } = input;
 
-    info!("Trying to generate with seed {:?}", seed);
+    println!("Trying to generate with seed {:?}", seed);
 
-    info!("Finding patterns in lattice");
+    println!("Finding patterns in lattice");
     let (pattern_group, representatives) =
         process_patterns_in_lattice(&input_lattice, &pattern_shape);
-    info!("# patterns = {}", pattern_group.num_patterns());
+    println!("# patterns = {}", pattern_group.num_patterns());
 
     if let Some(palette_path) = args.palette {
         // Save the palette image for debugging.
@@ -170,15 +181,22 @@ fn generate(
 
     let pattern_colors = find_pattern_colors(&input_lattice, &representatives);
 
+    let volume = lat::Extent::from_min_and_local_supremum(
+        [0, 0, 0].into(), output_size
+    ).volume();
+    let total_num_removals = volume * (pattern_group.num_patterns() - 1) as usize;
+    let progress_bar = ProgressBar::new(total_num_removals as u64);
+
     let mut generator = Generator::new(seed, output_size, &pattern_group);
     let mut frames = Vec::new();
     let mut success = true;
+    let mut num_updates = 0;
     println!("Starting generator");
     loop {
         match generator.update(&pattern_group) {
             UpdateResult::Success => break,
             UpdateResult::Failure => {
-                error!("Failed to generate");
+                println!("Failed to generate");
                 success = false;
                 break;
             }
@@ -190,7 +208,10 @@ fn generate(
             break;
         }
 
-        if args.gif.is_some() {
+        let num_removals_now = total_num_removals - generator.get_remaining_pattern_count();
+        progress_bar.set_position(num_removals_now as u64);
+
+        if args.gif.is_some() && num_updates % args.skip_frames == 0 {
             let superposition = color_superposition(generator.get_wave_lattice(), &pattern_colors);
             let superposition_img = image_from_lattice(&superposition);
             frames.push(Frame::from_parts(
@@ -200,7 +221,11 @@ fn generate(
                 Delay::from_numer_denom_ms(1, 1),
             ));
         }
+
+        num_updates += 1;
     }
+
+    progress_bar.finish();
 
     // TODO: support saving 3D lattice for viewing (RON format?)
     if num_dimensions == 3 {
@@ -208,7 +233,7 @@ fn generate(
     }
 
     if let Some(gif_path) = args.gif {
-        info!("Writing {:?}", gif_path);
+        println!("Writing {:?}", gif_path);
         let file_out = File::create(&gif_path).unwrap();
         gif::Encoder::new(file_out)
             .encode_frames(frames.into_iter())
@@ -219,7 +244,7 @@ fn generate(
         let result = generator.result();
         let colors = color_final_patterns(&result, &pattern_colors);
         let final_img = image_from_lattice(&colors);
-        info!("Writing {:?}", args.output_path);
+        println!("Writing {:?}", args.output_path);
         final_img
             .save(args.output_path)
             .expect("Failed to save output image");

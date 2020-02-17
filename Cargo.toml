@@ -15,10 +15,11 @@ path = "src/lib.rs"
 [dependencies]
 ctrlc = "*"
 dot_vox = "*"
-env_logger = "*"
+flexi_logger = "*"
 hibitset = "*"
 ilattice3 = { git = "https://github.com/bonsairobo/ilattice3" }
 image = "*"
+indicatif = "*"
 log = "*"
 paw = "*"
 rand = { version = "*", features = ["small_rng"] }
