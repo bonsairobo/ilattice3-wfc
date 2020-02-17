@@ -70,7 +70,7 @@ fn process_args(args: &Args) -> ProcessedInput<PeriodicYLevelsIndexer> {
 
     let mut seed = [0; 32];
     let seed_bytes = args.seed.as_bytes();
-    seed[..seed_bytes.len()].clone_from_slice(seed_bytes);
+    seed[..seed_bytes.len().min(32)].clone_from_slice(seed_bytes);
 
     if args.pattern_size.len() != 3 {
         panic!("Pattern size must specify 3 dimensions");
@@ -171,6 +171,7 @@ fn generate(
     let mut generator = Generator::new(seed, output_size, &pattern_set);
     let mut frames = Vec::new();
     let mut success = true;
+    println!("Starting generator");
     loop {
         match generator.update(&pattern_set) {
             UpdateResult::Success => break,

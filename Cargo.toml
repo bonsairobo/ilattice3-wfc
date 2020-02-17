@@ -10,6 +10,7 @@ path = "src/lib.rs"
 
 [profile.release]
 debug = true
+opt-level = 1
 
 [dependencies]
 ctrlc = "*"

@@ -5,7 +5,7 @@ use crate::{
 use hibitset::{BitSet, BitSetLike};
 use ilattice3 as lat;
 use ilattice3::Lattice;
-use log::debug;
+use log::{debug, trace};
 use rand::prelude::*;
 
 /// The possible remaining patterns that could go in each slot of the output. The colloquial "wave
@@ -72,18 +72,33 @@ impl Wave {
             .unwrap()
     }
 
+    /// Returns `true` iff the slot is empty after removal.
     pub fn remove_pattern(
         &mut self, pattern_group: &PatternGroup, slot: &lat::Point, pattern: PatternId
-    ) {
-        let possible_offset_patterns = self.slots.get_mut_world(slot);
-        possible_offset_patterns.remove(pattern.0);
-        if possible_offset_patterns.iter().count() == 1 {
+    ) -> bool {
+        trace!("Removing {:?} from {}", pattern, slot);
+
+        let possible_slot_patterns = self.slots.get_mut_world(slot);
+        possible_slot_patterns.remove(pattern.0);
+        // TODO: we probably don't need to count when `remove_pattern` is called from `propagate`
+        let remaining_patterns = possible_slot_patterns.iter().count();
+        if remaining_patterns == 0 {
+            return true;
+        }
+        if remaining_patterns == 1 {
             // Don't want to choose this slot again.
             self.set_max_entropy(slot);
         } else {
             self.reduce_entropy(pattern_group, slot, pattern);
         }
+
         self.remaining_pattern_count -= 1;
+
+        // For consistency, say that no adjacent slots support this pattern anymore.
+        let support = self.pattern_supports.get_mut_world(slot).get_mut(pattern);
+        support.clear();
+
+        false
     }
 
     pub fn collapse_slot(
@@ -91,15 +106,17 @@ impl Wave {
         pattern_group: &PatternGroup,
         slot: &lat::Point,
         assign_pattern: PatternId,
-    ) {
-        let remove_patterns: Vec<u32> = {
+    ) -> Vec<PatternId> {
+        let remove_patterns: Vec<PatternId> = {
             let set = self.slots.get_mut_world(slot);
 
-            set.iter().filter(|p| *p != assign_pattern.0).collect()
+            set.iter().map(|i| PatternId(i)).filter(|p| *p != assign_pattern).collect()
         };
-        for removed_pattern in remove_patterns.into_iter() {
-            self.remove_pattern(pattern_group, slot, PatternId(removed_pattern));
+        for pattern in remove_patterns.iter() {
+            self.remove_pattern(pattern_group, slot, *pattern);
         }
+
+        remove_patterns
     }
 
     pub fn reduce_entropy(
@@ -129,6 +146,10 @@ impl Wave {
 
     pub fn get_slot(&self, slot: &lat::Point) -> &BitSet {
         self.slots.get_world(slot)
+    }
+
+    pub fn get_support(&mut self, slot: &lat::Point, pattern: PatternId) -> &mut PatternSupport {
+        self.pattern_supports.get_mut_world(slot).get_mut(pattern)
     }
 }
 

@@ -66,7 +66,6 @@ impl PatternGroup {
         *self.weights.get(id)
     }
 
-    // Based on the index type of `BitSet`, we can return at most a `u32`.
     pub fn num_patterns(&self) -> u32 {
         self.weights.num_elements() as u32
     }
@@ -192,19 +191,14 @@ impl SymmetricPatternConstraints {
         self.num_patterns
     }
 
-    /// Returns whether `pattern` is compatible with `offset_pattern` in the configuration where
-    /// the center of `offset_pattern` is `offset` from the center of `pattern`. This should be an
-    /// antisymmetric relation, i.e. `compatible(t, p1, p2) <=> compatible(-t, p2, p1)`.
-    pub fn compatible(
-        &self,
-        offset: OffsetId,
-        pattern: PatternId,
-        offset_pattern: PatternId,
-    ) -> bool {
-        self.constraints
-            .get(pattern)
-            .get(offset)
-            .contains(offset_pattern.0)
+    pub fn iter_compatible(
+        &self, pattern: PatternId, offset: OffsetId
+    ) -> impl Iterator<Item = PatternId> + '_ {
+        self.constraints.get(pattern).get(offset).iter().map(|i| PatternId(i))
+    }
+
+    pub fn num_compatible(&self, pattern: PatternId, offset: OffsetId) -> u32 {
+        self.iter_compatible(pattern, offset).count() as u32
     }
 
     pub fn add_compatible_patterns(
@@ -236,11 +230,7 @@ impl SymmetricPatternConstraints {
             for offset in (0..self.offset_group.num_offsets()).map(|o| OffsetId(o)) {
                 // If P1 allows P2 to be at offset, then P2 allows P1 to be at -offset.
                 *pattern_supports.get_mut(pattern).counts.get_mut(offset) =
-                    self.constraints
-                        .get(pattern)
-                        .get(self.offset_group.opposite(offset))
-                        .iter()
-                        .count() as u32;
+                    self.num_compatible(pattern, self.offset_group.opposite(offset)) as i32;
             }
         }
 
@@ -253,17 +243,20 @@ impl SymmetricPatternConstraints {
 /// is not possible.
 #[derive(Clone)]
 pub struct PatternSupport {
-    counts: OffsetMap<u32>,
+    counts: OffsetMap<i32>,
 }
 
 impl PatternSupport {
     /// Returns `true` iff `pattern` no longer gives any support.
-    pub fn remove_support(&mut self, offset: OffsetId) -> bool {
+    pub fn remove(&mut self, offset: OffsetId) -> bool {
         let count = self.counts.get_mut(offset);
-        debug_assert!(*count > 0);
         *count -= 1;
 
         *count == 0
+    }
+
+    pub fn clear(&mut self) {
+        self.counts = OffsetMap::fill(0, self.counts.num_elements());
     }
 }
 
