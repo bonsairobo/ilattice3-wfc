@@ -81,19 +81,22 @@ struct ProcessedInput<I> {
 fn process_args(args: &Args) -> ProcessedInput<PeriodicYLevelsIndexer> {
     let indexer = PeriodicYLevelsIndexer {};
 
-    let mut seed = [0; NUM_SEED_BYTES];
-    let seed_bytes = args.seed.as_bytes();
-    seed[..seed_bytes.len().min(NUM_SEED_BYTES)].clone_from_slice(seed_bytes);
-
     if args.pattern_size.len() != 3 {
         panic!("Pattern size must specify 3 dimensions");
     }
     if args.output_size.len() != 3 {
         panic!("Output size must specify 3 dimensions");
     }
-
     let pattern_size = lat::Point::from(get_three_elements(&args.pattern_size));
     let output_size = lat::Point::from(get_three_elements(&args.output_size));
+
+    if args.gif.is_some() && output_size.z > 2 {
+        panic!("GIF output not supported for 3D input");
+    }
+
+    let mut seed = [0; NUM_SEED_BYTES];
+    let seed_bytes = args.seed.as_bytes();
+    seed[..seed_bytes.len().min(NUM_SEED_BYTES)].clone_from_slice(seed_bytes);
 
     let extension = args
         .input_path
