@@ -52,7 +52,7 @@ pub fn make_palette_lattice<I: LatticeIndexer + Copy>(
 ) -> Lattice<u32, I> {
     let pattern_size = *representatives.get(PatternId(0)).get_local_supremum();
     let mut palette_size = pattern_size;
-    palette_size.x = (pattern_size.x + 1) * representatives.num_patterns() as i32;
+    palette_size.x = (pattern_size.x + 1) * representatives.num_elements() as i32;
     let palette_extent = lat::Extent::from_min_and_local_supremum([0, 0, 0].into(), palette_size);
     let mut palette_lattice = Lattice::fill_with_indexer(source_lattice.indexer, palette_extent, 0);
     let mut next_min = [0, 0, 0].into();

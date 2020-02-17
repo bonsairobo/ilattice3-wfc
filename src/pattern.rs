@@ -1,4 +1,7 @@
-use crate::offset::{OffsetGroup, OffsetId};
+use crate::{
+    offset::{OffsetGroup, OffsetId},
+    static_vec::{Id, StaticVec},
+};
 
 use hibitset::{BitSet, BitSetLike};
 use ilattice3 as lat;
@@ -25,6 +28,20 @@ pub struct PatternSet {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PatternId(pub u32);
 
+impl Into<usize> for PatternId {
+    fn into(self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl From<usize> for PatternId {
+    fn from(other: usize) -> PatternId {
+        PatternId(other as u32)
+    }
+}
+
+impl Id for PatternId {}
+
 const EMPTY_PATTERN_ID: PatternId = PatternId(std::u32::MAX);
 
 impl PatternSet {
@@ -39,7 +56,7 @@ impl PatternSet {
     }
 
     pub fn assert_valid(&self) {
-        assert!(self.weights.num_patterns() == self.constraints.num_patterns());
+        assert!(self.weights.num_elements() as u32 == self.constraints.num_patterns());
         self.constraints.assert_valid();
     }
 
@@ -50,7 +67,7 @@ impl PatternSet {
 
     // Based on the index type of `BitSet`, we can return at most a `u32`.
     pub fn num_patterns(&self) -> u32 {
-        self.weights.num_patterns()
+        self.weights.num_elements() as u32
     }
 
     /// Sample the possible patterns by their probability (weights) in the source data.
@@ -169,7 +186,7 @@ impl SymmetricPatternConstraints {
     }
 
     pub fn num_patterns(&self) -> u32 {
-        self.constraints.num_patterns()
+        self.constraints.num_elements() as u32
     }
 
     /// Returns whether `pattern` is compatible with `offset_pattern` in the configuration where
@@ -226,51 +243,4 @@ pub fn find_pattern_colors<I: LatticeIndexer>(
     representatives.map(|e| unsafe { std::mem::transmute(*lattice.get_local(&e.get_minimum())) })
 }
 
-pub struct PatternData<T> {
-    data: Vec<T>,
-}
-
-impl<T: Clone + Default> PatternData<T> {
-    pub fn new_with_default(num_patterns: usize) -> Self {
-        PatternData {
-            data: vec![T::default(); num_patterns],
-        }
-    }
-}
-
-impl<T: Clone> PatternData<T> {
-    pub fn fill(value: T, num_patterns: usize) -> Self {
-        PatternData {
-            data: vec![value; num_patterns],
-        }
-    }
-}
-
-impl<T> PatternData<T> {
-    pub fn new(data: Vec<T>) -> Self {
-        Self { data }
-    }
-
-    pub fn get(&self, pattern_id: PatternId) -> &T {
-        &self.data[pattern_id.0 as usize]
-    }
-
-    pub fn get_mut(&mut self, pattern_id: PatternId) -> &mut T {
-        &mut self.data[pattern_id.0 as usize]
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = (PatternId, &T)> {
-        self.data
-            .iter()
-            .enumerate()
-            .map(|(i, d)| (PatternId(i as u32), d))
-    }
-
-    pub fn map<S, F: Fn(&T) -> S>(&self, f: F) -> PatternData<S> {
-        PatternData::new(self.data.iter().map(f).collect())
-    }
-
-    pub fn num_patterns(&self) -> u32 {
-        self.data.len() as u32
-    }
-}
+type PatternData<T> = StaticVec<PatternId, T>;

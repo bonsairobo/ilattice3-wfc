@@ -6,6 +6,7 @@ mod generate;
 mod image;
 mod offset;
 mod pattern;
+mod static_vec;
 
 pub use crate::image::{
     color_final_patterns, color_superposition, image_from_lattice, lattice_from_image,
