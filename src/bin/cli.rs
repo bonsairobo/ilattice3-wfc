@@ -1,5 +1,6 @@
 use ilattice3_wfc::*;
 
+use flexi_logger::{Logger, default_format};
 use ilattice3 as lat;
 use ilattice3::{Lattice, PeriodicYLevelsIndexer};
 use image::{self, gif, Delay, Frame};
@@ -57,8 +58,9 @@ fn main(args: Args) -> Result<(), std::io::Error> {
         .expect("Failed to register SIGINT handler");
 
     if let Some(log_config) = &args.log {
-        flexi_logger::Logger::with_str(log_config.as_str())
+        Logger::with_str(log_config.as_str())
             .log_to_file()
+            .format(default_format)
             .start()
             .unwrap_or_else(|e| panic!("Logger initialization failed with {}", e));
     }
