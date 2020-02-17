@@ -1,6 +1,6 @@
 use crate::{
     offset::OffsetId,
-    pattern::{PatternId, PatternSet},
+    pattern::{PatternId, PatternGroup},
 };
 
 use hibitset::{BitSet, BitSetLike};
@@ -17,7 +17,7 @@ pub struct Generator {
 }
 
 impl Generator {
-    pub fn new(seed: [u8; 32], output_size: lat::Point, patterns: &PatternSet) -> Self {
+    pub fn new(seed: [u8; 32], output_size: lat::Point, patterns: &PatternGroup) -> Self {
         Generator {
             wave: Wave::new(patterns, output_size),
             rng: StdRng::from_seed(seed),
@@ -37,7 +37,7 @@ impl Generator {
         })
     }
 
-    pub fn update(&mut self, patterns: &PatternSet) -> UpdateResult {
+    pub fn update(&mut self, patterns: &PatternGroup) -> UpdateResult {
         let (slot, entropy) = { self.wave.choose_lowest_entropy_slot(&mut self.rng) };
         debug!(
             "{} candidate patterns remaining; chose slot {} with entropy {}",
@@ -55,7 +55,7 @@ impl Generator {
 
     /// Forces `slot` to conform to a single pattern P. P is chosen by sampling from the prior
     /// distribution.
-    fn observe_slot(&mut self, patterns: &PatternSet, slot: &lat::Point) -> bool {
+    fn observe_slot(&mut self, patterns: &PatternGroup, slot: &lat::Point) -> bool {
         let possible_patterns = self.wave.slots.get_world(slot);
         let pattern = patterns.sample_pattern(possible_patterns, &mut self.rng);
         self.wave.collapse_slot(patterns, slot, pattern);
@@ -67,7 +67,7 @@ impl Generator {
     // #[measure([ResponseTime, Throughput])]
     fn propagate_constraints(
         &mut self,
-        pattern_set: &PatternSet,
+        pattern_set: &PatternGroup,
         changed_slot: lat::Point,
     ) -> bool {
         let mut slots_to_visit = BTreeSet::new();
@@ -112,7 +112,7 @@ impl Generator {
 
     fn remove_impossible_patterns(
         &mut self,
-        pattern_set: &PatternSet,
+        pattern_set: &PatternGroup,
         visit_slot: &lat::Point,
         offset_slot: &lat::Point,
         offset_id: OffsetId,
@@ -169,7 +169,7 @@ struct Wave {
 }
 
 impl Wave {
-    fn new(patterns: &PatternSet, output_size: lat::Point) -> Self {
+    fn new(patterns: &PatternGroup, output_size: lat::Point) -> Self {
         // Start with all possible patterns.
         let mut all_possible = BitSet::with_capacity(patterns.num_patterns());
         for i in 0..patterns.num_patterns() {
@@ -210,7 +210,7 @@ impl Wave {
             .unwrap()
     }
 
-    fn remove_pattern(&mut self, patterns: &PatternSet, slot: &lat::Point, pattern: PatternId) {
+    fn remove_pattern(&mut self, patterns: &PatternGroup, slot: &lat::Point, pattern: PatternId) {
         let possible_offset_patterns = self.slots.get_mut_world(slot);
         possible_offset_patterns.remove(pattern.0);
         if possible_offset_patterns.iter().count() == 1 {
@@ -224,7 +224,7 @@ impl Wave {
 
     fn collapse_slot(
         &mut self,
-        patterns: &PatternSet,
+        patterns: &PatternGroup,
         slot: &lat::Point,
         assign_pattern: PatternId,
     ) {
@@ -240,7 +240,7 @@ impl Wave {
 
     fn lower_entropy(
         &mut self,
-        patterns: &PatternSet,
+        patterns: &PatternGroup,
         slot: &lat::Point,
         remove_pattern: PatternId,
     ) {
@@ -273,7 +273,7 @@ fn entropy(sum_weights: f32, sum_weights_log_weights: f32) -> f32 {
     sum_weights.log2() - sum_weights_log_weights / sum_weights
 }
 
-fn slot_entropy(patterns: &PatternSet, possible_patterns: &BitSet) -> SlotEntropyCache {
+fn slot_entropy(patterns: &PatternGroup, possible_patterns: &BitSet) -> SlotEntropyCache {
     assert!(!possible_patterns.is_empty());
 
     // Collapsed slots shouldn't be chosen.

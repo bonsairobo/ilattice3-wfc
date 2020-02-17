@@ -17,7 +17,7 @@ pub struct PatternShape {
 }
 
 /// Metadata about configurations of voxels, called "patterns," and how they are related.
-pub struct PatternSet {
+pub struct PatternGroup {
     /// Count of each pattern in the source lattice. Equivalently, a prior distribution of patterns.
     weights: PatternMap<u32>,
     /// One set of constraints for each pattern.
@@ -44,9 +44,9 @@ impl Id for PatternId {}
 
 const EMPTY_PATTERN_ID: PatternId = PatternId(std::u32::MAX);
 
-impl PatternSet {
+impl PatternGroup {
     pub fn new(weights: PatternMap<u32>, constraints: SymmetricPatternConstraints) -> Self {
-        let me = PatternSet {
+        let me = PatternGroup {
             weights,
             constraints,
         };
@@ -96,7 +96,7 @@ impl PatternSet {
 pub fn process_patterns_in_lattice<T>(
     lattice: &Lattice<T, PeriodicYLevelsIndexer>,
     pattern_shape: &PatternShape,
-) -> (PatternSet, PatternRepresentatives)
+) -> (PatternGroup, PatternRepresentatives)
 where
     T: Clone + Copy + Default + Eq + Hash,
 {
@@ -150,7 +150,7 @@ where
         }
     }
 
-    let pattern_set = PatternSet::new(pattern_weights, pattern_constraints);
+    let pattern_set = PatternGroup::new(pattern_weights, pattern_constraints);
 
     (
         pattern_set,
