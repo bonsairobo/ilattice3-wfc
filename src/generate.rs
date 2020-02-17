@@ -169,18 +169,19 @@ struct Wave {
 }
 
 impl Wave {
-    fn new(patterns: &PatternGroup, output_size: lat::Point) -> Self {
+    fn new(pattern_group: &PatternGroup, output_size: lat::Point) -> Self {
         // Start with all possible patterns.
-        let mut all_possible = BitSet::with_capacity(patterns.num_patterns());
-        for i in 0..patterns.num_patterns() {
+        let mut all_possible = BitSet::with_capacity(pattern_group.num_patterns());
+        for i in 0..pattern_group.num_patterns() {
             all_possible.add(i);
         }
 
         let extent = lat::Extent::from_min_and_world_supremum([0, 0, 0].into(), output_size);
         let slots = Lattice::fill(extent, all_possible.clone());
-        let remaining_pattern_count = slots.get_extent().volume() as u32 * patterns.num_patterns();
+        let remaining_pattern_count =
+            slots.get_extent().volume() as u32 * pattern_group.num_patterns();
 
-        let initial_entropy = slot_entropy(patterns, &all_possible);
+        let initial_entropy = slot_entropy(pattern_group, &all_possible);
         debug!("Initial entropy = {:?}", initial_entropy);
         let entropy_cache = Lattice::fill(extent, initial_entropy);
 
@@ -210,21 +211,23 @@ impl Wave {
             .unwrap()
     }
 
-    fn remove_pattern(&mut self, patterns: &PatternGroup, slot: &lat::Point, pattern: PatternId) {
+    fn remove_pattern(
+        &mut self, pattern_group: &PatternGroup, slot: &lat::Point, pattern: PatternId
+    ) {
         let possible_offset_patterns = self.slots.get_mut_world(slot);
         possible_offset_patterns.remove(pattern.0);
         if possible_offset_patterns.iter().count() == 1 {
             // Don't want to choose this slot again.
             self.set_max_entropy(slot);
         } else {
-            self.lower_entropy(patterns, slot, pattern);
+            self.lower_entropy(pattern_group, slot, pattern);
         }
         self.remaining_pattern_count -= 1;
     }
 
     fn collapse_slot(
         &mut self,
-        patterns: &PatternGroup,
+        pattern_group: &PatternGroup,
         slot: &lat::Point,
         assign_pattern: PatternId,
     ) {
@@ -234,18 +237,18 @@ impl Wave {
             set.iter().filter(|p| *p != assign_pattern.0).collect()
         };
         for removed_pattern in remove_patterns.into_iter() {
-            self.remove_pattern(patterns, slot, PatternId(removed_pattern));
+            self.remove_pattern(pattern_group, slot, PatternId(removed_pattern));
         }
     }
 
     fn lower_entropy(
         &mut self,
-        patterns: &PatternGroup,
+        pattern_group: &PatternGroup,
         slot: &lat::Point,
         remove_pattern: PatternId,
     ) {
         let cache = self.entropy_cache.get_mut_world(slot);
-        let weight = patterns.get_weight(remove_pattern) as f32;
+        let weight = pattern_group.get_weight(remove_pattern) as f32;
         cache.sum_weights -= weight;
         cache.sum_weights_log_weights -= weight * weight.log2();
         cache.entropy = entropy(cache.sum_weights, cache.sum_weights_log_weights);
@@ -273,7 +276,7 @@ fn entropy(sum_weights: f32, sum_weights_log_weights: f32) -> f32 {
     sum_weights.log2() - sum_weights_log_weights / sum_weights
 }
 
-fn slot_entropy(patterns: &PatternGroup, possible_patterns: &BitSet) -> SlotEntropyCache {
+fn slot_entropy(pattern_group: &PatternGroup, possible_patterns: &BitSet) -> SlotEntropyCache {
     assert!(!possible_patterns.is_empty());
 
     // Collapsed slots shouldn't be chosen.
@@ -289,7 +292,7 @@ fn slot_entropy(patterns: &PatternGroup, possible_patterns: &BitSet) -> SlotEntr
     let mut sum_weights = 0.0;
     let mut sum_weights_log_weights = 0.0;
     for id in possible_patterns.iter() {
-        let weight = patterns.get_weight(PatternId(id)) as f32;
+        let weight = pattern_group.get_weight(PatternId(id)) as f32;
         sum_weights += weight;
         sum_weights_log_weights += weight * weight.log2();
     }
