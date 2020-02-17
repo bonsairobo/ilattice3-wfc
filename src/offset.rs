@@ -1,9 +1,11 @@
+use crate::static_vec::{Id, StaticVec};
+
 use ilattice3 as lat;
 use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct OffsetGroup {
-    offsets: Vec<lat::Point>,
+    offsets: OffsetMap<lat::Point>,
     offset_index: HashMap<lat::Point, usize>,
 }
 
@@ -17,7 +19,7 @@ impl OffsetGroup {
             .enumerate()
             .map(|(i, offset)| (*offset, i))
             .collect();
-        let offsets = offsets.to_vec();
+        let offsets = OffsetMap::new(offsets.to_vec());
 
         OffsetGroup {
             offsets,
@@ -38,11 +40,17 @@ impl OffsetGroup {
         )
     }
 
+    pub fn opposite(&self, offset: OffsetId) -> OffsetId {
+        let num_offsets = self.offsets.num_elements();
+        debug_assert!(num_offsets > 0);
+        let max_index = num_offsets - 1;
+        let opposite = max_index - offset.0;
+
+        opposite.into()
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = (OffsetId, &lat::Point)> {
-        self.offsets
-            .iter()
-            .enumerate()
-            .map(|(i, o)| (OffsetId(i), o))
+        self.offsets.iter()
     }
 }
 
@@ -50,6 +58,21 @@ impl OffsetGroup {
 #[derive(Clone, Copy, Debug)]
 pub struct OffsetId(pub usize);
 
+impl Into<usize> for OffsetId {
+    fn into(self) -> usize {
+        self.0
+    }
+}
+
+impl From<usize> for OffsetId {
+    fn from(other: usize) -> OffsetId {
+        OffsetId(other)
+    }
+}
+
+impl Id for OffsetId {}
+
+// Must be ordered so opposites have mirror indices.
 const FACE_3D_OFFSETS: [[i32; 3]; 6] = [
     [-1, 0, 0],
     [0, -1, 0],
@@ -66,6 +89,7 @@ pub fn face_3d_offsets() -> Vec<lat::Point> {
         .collect()
 }
 
+// Must be ordered so opposites have mirror indices.
 const EDGE_2D_OFFSETS: [[i32; 3]; 4] = [[-1, 0, 0], [0, -1, 0], [0, 1, 0], [1, 0, 0]];
 
 pub fn edge_2d_offsets() -> Vec<lat::Point> {
@@ -74,3 +98,5 @@ pub fn edge_2d_offsets() -> Vec<lat::Point> {
         .map(|o| lat::Point::from(*o))
         .collect()
 }
+
+pub type OffsetMap<T> = StaticVec<OffsetId, T>;

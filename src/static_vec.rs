@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
 /// A vector that doesn't change size, so all references (IDs) are always valid.
+#[derive(Clone)]
 pub struct StaticVec<I, T> {
     data: Vec<T>,
     marker: PhantomData<I>,
