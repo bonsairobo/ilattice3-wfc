@@ -166,7 +166,8 @@ impl Wave {
 
         self.remaining_pattern_count -= 1;
 
-        // For consistency, say that no adjacent slots support this pattern anymore.
+        // Even though this pattern is being removed, it may still have support at some offsets.
+        // Just clear that support now so we don't trigger another removal.
         let support = self.pattern_supports.get_mut_world(slot).get_mut(pattern);
         support.clear();
 
