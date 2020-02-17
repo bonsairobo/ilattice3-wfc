@@ -167,10 +167,9 @@ fn generate(
 
     println!("Trying to generate with seed {:?}", seed);
 
-    println!("Finding patterns in lattice");
     let (pattern_group, representatives) =
         process_patterns_in_lattice(&input_lattice, &pattern_shape);
-    println!("# patterns = {}", pattern_group.num_patterns());
+    println!("Found {} patterns in input lattice", pattern_group.num_patterns());
 
     if let Some(palette_path) = args.palette {
         // Save the palette image for debugging.
@@ -194,7 +193,6 @@ fn generate(
         match generator.update(&pattern_group) {
             UpdateResult::Success => break,
             UpdateResult::Failure => {
-                println!("Failed to generate");
                 success = false;
                 break;
             }
@@ -225,9 +223,21 @@ fn generate(
 
     progress_bar.finish();
 
-    // TODO: support saving 3D lattice for viewing (RON format?)
-    if num_dimensions == 3 {
-        return Ok(());
+    if success {
+        // TODO: support saving 3D lattice for viewing (RON format?)
+        if num_dimensions == 3 {
+            return Ok(());
+        }
+
+        let result = generator.result();
+        let colors = color_final_patterns(&result, &pattern_colors);
+        let final_img = image_from_lattice(&colors);
+        println!("Writing {:?}", args.output_path);
+        final_img
+            .save(args.output_path)
+            .expect("Failed to save output image");
+    } else {
+        println!("Failed to generate");
     }
 
     if let Some(gif_path) = args.gif {
@@ -236,16 +246,6 @@ fn generate(
         gif::Encoder::new(file_out)
             .encode_frames(frames.into_iter())
             .unwrap();
-    }
-
-    if success {
-        let result = generator.result();
-        let colors = color_final_patterns(&result, &pattern_colors);
-        let final_img = image_from_lattice(&colors);
-        println!("Writing {:?}", args.output_path);
-        final_img
-            .save(args.output_path)
-            .expect("Failed to save output image");
     }
 
     Ok(())
