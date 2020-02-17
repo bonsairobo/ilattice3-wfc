@@ -50,4 +50,11 @@ impl<I: Id, T> StaticVec<I, T> {
             .enumerate()
             .map(|(i, d)| (I::from(i), d))
     }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (I, &mut T)> {
+        self.data
+            .iter_mut()
+            .enumerate()
+            .map(|(i, d)| (I::from(i), d))
+    }
 }

@@ -1,8 +1,7 @@
 //! Utilities for using images. Mostly for testing the algorithms on 2D images.
 
-use crate::pattern::{PatternColors, PatternId, PatternRepresentatives};
+use crate::pattern::{PatternColors, PatternId, PatternRepresentatives, PatternSet};
 
-use hibitset::{BitSet, BitSetLike};
 use ilattice3 as lat;
 use ilattice3::{Lattice, LatticeIndexer};
 use image::{self, Rgba, RgbaImage};
@@ -64,12 +63,12 @@ pub fn make_palette_lattice<I: LatticeIndexer + Copy>(
     palette_lattice
 }
 
-pub fn color_superposition(lattice: &Lattice<BitSet>, colors: &PatternColors) -> Lattice<u32> {
+pub fn color_superposition(lattice: &Lattice<PatternSet>, colors: &PatternColors) -> Lattice<u32> {
     let mut color_lattice = Lattice::fill(lattice.get_extent(), 0);
     for p in &color_lattice.get_extent() {
         let mut color_sum = [0.0; 4];
         let mut num_patterns = 0;
-        for pattern_id in lattice.get_local(&p).iter().map(PatternId) {
+        for pattern_id in lattice.get_local(&p).iter() {
             let pattern_color = colors.get(pattern_id);
             for i in 0..4 {
                 color_sum[i] += pattern_color[i] as f32;

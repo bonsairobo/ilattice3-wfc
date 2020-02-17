@@ -1,8 +1,7 @@
 use crate::{
-    pattern::{PatternGroup, PatternId, PatternMap, PatternSupport},
+    pattern::{PatternGroup, PatternId, PatternMap, PatternSet, PatternSupport},
 };
 
-use hibitset::{BitSet, BitSetLike};
 use ilattice3 as lat;
 use ilattice3::Lattice;
 use log::{debug, trace};
@@ -11,7 +10,7 @@ use rand::prelude::*;
 /// The possible remaining patterns that could go in each slot of the output. The colloquial "wave
 /// function" to be collapsed.
 pub struct Wave {
-    slots: Lattice<BitSet>,
+    slots: Lattice<PatternSet>,
     entropy_cache: Lattice<SlotEntropyCache>,
     remaining_pattern_count: u32,
 
@@ -24,10 +23,7 @@ pub struct Wave {
 impl Wave {
     pub fn new(pattern_group: &PatternGroup, output_size: lat::Point) -> Self {
         // Start with all possible patterns.
-        let mut all_possible = BitSet::with_capacity(pattern_group.num_patterns());
-        for i in 0..pattern_group.num_patterns() {
-            all_possible.add(i);
-        }
+        let all_possible = PatternSet::all(pattern_group.num_patterns());
 
         let extent = lat::Extent::from_min_and_world_supremum([0, 0, 0].into(), output_size);
         let slots = Lattice::fill(extent, all_possible.clone());
@@ -79,9 +75,9 @@ impl Wave {
         trace!("Removing {:?} from {}", pattern, slot);
 
         let possible_slot_patterns = self.slots.get_mut_world(slot);
-        possible_slot_patterns.remove(pattern.0);
+        possible_slot_patterns.remove(pattern);
         // TODO: we probably don't need to count when `remove_pattern` is called from `propagate`
-        let remaining_patterns = possible_slot_patterns.iter().count();
+        let remaining_patterns = possible_slot_patterns.len();
         if remaining_patterns == 0 {
             return true;
         }
@@ -110,7 +106,7 @@ impl Wave {
         let remove_patterns: Vec<PatternId> = {
             let set = self.slots.get_mut_world(slot);
 
-            set.iter().map(|i| PatternId(i)).filter(|p| *p != assign_pattern).collect()
+            set.iter().filter(|p| *p != assign_pattern).collect()
         };
         for pattern in remove_patterns.iter() {
             self.remove_pattern(pattern_group, slot, *pattern);
@@ -140,11 +136,11 @@ impl Wave {
         cache.entropy = inf;
     }
 
-    pub fn get_slots(&self) -> &Lattice<BitSet> {
+    pub fn get_slots(&self) -> &Lattice<PatternSet> {
         &self.slots
     }
 
-    pub fn get_slot(&self, slot: &lat::Point) -> &BitSet {
+    pub fn get_slot(&self, slot: &lat::Point) -> &PatternSet {
         self.slots.get_world(slot)
     }
 
@@ -166,11 +162,11 @@ fn entropy(sum_weights: f32, sum_weights_log_weights: f32) -> f32 {
     sum_weights.log2() - sum_weights_log_weights / sum_weights
 }
 
-fn slot_entropy(pattern_group: &PatternGroup, possible_patterns: &BitSet) -> SlotEntropyCache {
+fn slot_entropy(pattern_group: &PatternGroup, possible_patterns: &PatternSet) -> SlotEntropyCache {
     assert!(!possible_patterns.is_empty());
 
     // Collapsed slots shouldn't be chosen.
-    if possible_patterns.iter().count() == 1 {
+    if possible_patterns.len() == 1 {
         let inf = std::f32::INFINITY;
         return SlotEntropyCache {
             sum_weights: inf,
@@ -181,8 +177,8 @@ fn slot_entropy(pattern_group: &PatternGroup, possible_patterns: &BitSet) -> Slo
 
     let mut sum_weights = 0.0;
     let mut sum_weights_log_weights = 0.0;
-    for id in possible_patterns.iter() {
-        let weight = pattern_group.get_weight(PatternId(id)) as f32;
+    for pattern in possible_patterns.iter() {
+        let weight = pattern_group.get_weight(pattern) as f32;
         sum_weights += weight;
         sum_weights_log_weights += weight * weight.log2();
     }

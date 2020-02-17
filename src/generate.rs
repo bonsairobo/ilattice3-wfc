@@ -1,9 +1,8 @@
 use crate::{
-    pattern::{PatternId, PatternGroup},
+    pattern::{PatternId, PatternGroup, PatternSet},
     wave::Wave,
 };
 
-use hibitset::{BitSet, BitSetLike};
 use ilattice3 as lat;
 use ilattice3::Lattice;
 use log::{debug, trace, warn};
@@ -23,16 +22,14 @@ impl Generator {
         }
     }
 
-    pub fn get_wave_lattice(&self) -> &Lattice<BitSet> {
+    pub fn get_wave_lattice(&self) -> &Lattice<PatternSet> {
         self.wave.get_slots()
     }
 
     /// Warning: undefined behavior if called before `update` returns `Success`.
     pub fn result(&self) -> Lattice<PatternId> {
-        self.wave.get_slots().map(|possible_patterns: &BitSet| {
-            let only_pattern: u32 = possible_patterns.iter().next().unwrap();
-
-            PatternId(only_pattern)
+        self.wave.get_slots().map(|possible_patterns: &PatternSet| {
+            possible_patterns.iter().next().unwrap()
         })
     }
 

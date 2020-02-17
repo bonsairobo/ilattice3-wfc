@@ -71,16 +71,15 @@ impl PatternGroup {
     }
 
     /// Sample the possible patterns by their probability (weights) in the source data.
-    pub fn sample_pattern<R>(&self, possible_patterns: &BitSet, rng: &mut R) -> PatternId
+    pub fn sample_pattern<R>(&self, possible_patterns: &PatternSet, rng: &mut R) -> PatternId
     where
         R: Rng,
     {
         let mut possible_weights = Vec::new();
         let mut possible_patterns_vec = Vec::new();
-        for i in possible_patterns.iter() {
-            let id = PatternId(i);
-            possible_weights.push(*self.weights.get(id));
-            possible_patterns_vec.push(id);
+        for pattern in possible_patterns.iter() {
+            possible_weights.push(*self.weights.get(pattern));
+            possible_patterns_vec.push(pattern);
         }
         let dist = WeightedIndex::new(&possible_weights).unwrap();
         let choice = dist.sample(rng);
@@ -256,7 +255,7 @@ impl PatternSupport {
     }
 
     pub fn clear(&mut self) {
-        self.counts = OffsetMap::fill(0, self.counts.num_elements());
+        self.counts.iter_mut().for_each(|(_offset, count)| *count = 0);
     }
 }
 
@@ -270,3 +269,39 @@ pub fn find_pattern_colors<I: LatticeIndexer>(
 }
 
 pub type PatternMap<T> = StaticVec<PatternId, T>;
+
+#[derive(Clone)]
+pub struct PatternSet {
+    bits: BitSet,
+    size: u32,
+}
+
+impl PatternSet {
+    pub fn all(num_patterns: u32) -> Self {
+        let mut bits = BitSet::with_capacity(num_patterns);
+        for i in 0..num_patterns {
+            bits.add(i);
+        }
+
+        PatternSet {
+            size: num_patterns, bits
+        }
+    }
+
+    pub fn len(&self) -> u32 {
+        self.size
+    }
+
+    pub fn remove(&mut self, pattern: PatternId) {
+        self.bits.remove(pattern.0);
+        self.size -= 1;
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = PatternId> + '_ {
+        (&self.bits).iter().map(|i| PatternId(i))
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
