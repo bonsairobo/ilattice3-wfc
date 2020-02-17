@@ -181,9 +181,7 @@ fn generate(
 
     let pattern_colors = find_pattern_colors(&input_lattice, &representatives);
 
-    let volume = lat::Extent::from_min_and_local_supremum(
-        [0, 0, 0].into(), output_size
-    ).volume();
+    let volume = lat::Extent::from_min_and_local_supremum([0, 0, 0].into(), output_size).volume();
     let total_num_removals = volume * (pattern_group.num_patterns() - 1) as usize;
     let progress_bar = ProgressBar::new(total_num_removals as u64);
 

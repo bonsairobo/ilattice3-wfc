@@ -16,6 +16,6 @@ pub use crate::image::{
 pub use generate::{Generator, UpdateResult, NUM_SEED_BYTES};
 pub use offset::{edge_2d_offsets, face_3d_offsets, OffsetGroup};
 pub use pattern::{
-    find_pattern_colors, process_patterns_in_lattice, PatternColors, PatternId, PatternGroup,
+    find_pattern_colors, process_patterns_in_lattice, PatternColors, PatternGroup, PatternId,
     PatternShape, SymmetricPatternConstraints,
 };

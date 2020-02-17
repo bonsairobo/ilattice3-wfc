@@ -11,7 +11,10 @@ pub trait Id: Into<usize> + From<usize> {}
 
 impl<I, T> StaticVec<I, T> {
     pub fn new(data: Vec<T>) -> Self {
-        Self { data, marker: PhantomData::default() }
+        Self {
+            data,
+            marker: PhantomData::default(),
+        }
     }
 
     pub fn map<S, F: Fn(&T) -> S>(&self, f: F) -> StaticVec<I, S> {
@@ -45,10 +48,7 @@ impl<I: Id, T> StaticVec<I, T> {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (I, &T)> {
-        self.data
-            .iter()
-            .enumerate()
-            .map(|(i, d)| (I::from(i), d))
+        self.data.iter().enumerate().map(|(i, d)| (I::from(i), d))
     }
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (I, &mut T)> {

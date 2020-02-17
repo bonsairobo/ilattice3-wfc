@@ -1,5 +1,5 @@
 use crate::{
-    pattern::{PatternId, PatternGroup, PatternSet},
+    pattern::{PatternGroup, PatternId, PatternSet},
     wave::Wave,
 };
 
@@ -18,7 +18,9 @@ pub struct Generator {
 
 impl Generator {
     pub fn new(
-        seed: [u8; NUM_SEED_BYTES], output_size: lat::Point, pattern_group: &PatternGroup
+        seed: [u8; NUM_SEED_BYTES],
+        output_size: lat::Point,
+        pattern_group: &PatternGroup,
     ) -> Self {
         Generator {
             wave: Wave::new(pattern_group, output_size),
@@ -32,9 +34,9 @@ impl Generator {
 
     /// Warning: undefined behavior if called before `update` returns `Success`.
     pub fn result(&self) -> Lattice<PatternId> {
-        self.wave.get_slots().map(|possible_patterns: &PatternSet| {
-            possible_patterns.iter().next().unwrap()
-        })
+        self.wave
+            .get_slots()
+            .map(|possible_patterns: &PatternSet| possible_patterns.iter().next().unwrap())
     }
 
     pub fn get_remaining_pattern_count(&self) -> usize {
@@ -45,7 +47,9 @@ impl Generator {
         let (slot, entropy) = self.wave.choose_least_entropy_slot(&mut self.rng);
         debug!(
             "{} candidate patterns remaining; chose slot {} with least entropy {}",
-            self.wave.get_remaining_pattern_count(), slot, entropy
+            self.wave.get_remaining_pattern_count(),
+            slot,
+            entropy
         );
 
         if !self.wave.observe_slot(&mut self.rng, pattern_group, &slot) {

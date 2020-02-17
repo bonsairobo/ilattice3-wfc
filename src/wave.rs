@@ -72,7 +72,10 @@ impl Wave {
     /// Forces `slot` to conform to a single pattern P. P is chosen by sampling from the prior
     /// distribution.
     pub fn observe_slot<R: Rng>(
-        &mut self, rng: &mut R, pattern_group: &PatternGroup, slot: &lat::Point
+        &mut self,
+        rng: &mut R,
+        pattern_group: &PatternGroup,
+        slot: &lat::Point,
     ) -> bool {
         let possible_patterns = self.get_slot(slot);
         let pattern = pattern_group.sample_pattern(possible_patterns, rng);
@@ -95,7 +98,11 @@ impl Wave {
             // We know that this pattern is not longer possible at `visit_slot`, so no adjacent
             // patterns can use it as support.
             let (visit_slot, impossible_at_visit_slot) = past_removals.pop().unwrap();
-            trace!("Visiting {} that removed {:?}", visit_slot, impossible_at_visit_slot);
+            trace!(
+                "Visiting {} that removed {:?}",
+                visit_slot,
+                impossible_at_visit_slot
+            );
 
             for (offset_id, offset) in pattern_group.get_offset_group().iter() {
                 // Make sure we don't index out of bounds.
@@ -107,18 +114,19 @@ impl Wave {
 
                 // Remove support. We detect that a pattern is not possible in a slot if it runs out
                 // of supporting adjacent patterns.
-                for offset_pattern in pattern_group.iter_compatible(
-                    impossible_at_visit_slot, offset_id
-                ) {
-                    trace!("Removing support for {:?} @ {}", offset_pattern, offset_slot);
-                    let no_support = self.remove_support(
-                        &offset_slot, offset_pattern, offset_id
+                for offset_pattern in
+                    pattern_group.iter_compatible(impossible_at_visit_slot, offset_id)
+                {
+                    trace!(
+                        "Removing support for {:?} @ {}",
+                        offset_pattern,
+                        offset_slot
                     );
+                    let no_support = self.remove_support(&offset_slot, offset_pattern, offset_id);
                     if no_support {
                         trace!("No support remaining");
-                        let slot_empty = self.remove_pattern(
-                            pattern_group, &offset_slot, offset_pattern
-                        );
+                        let slot_empty =
+                            self.remove_pattern(pattern_group, &offset_slot, offset_pattern);
                         past_removals.push((offset_slot, offset_pattern));
                         if slot_empty {
                             // Failed to fully assign the output lattice. Give up.
@@ -135,7 +143,10 @@ impl Wave {
 
     /// Returns `true` iff the slot is empty after removal.
     fn remove_pattern(
-        &mut self, pattern_group: &PatternGroup, slot: &lat::Point, pattern: PatternId
+        &mut self,
+        pattern_group: &PatternGroup,
+        slot: &lat::Point,
+        pattern: PatternId,
     ) -> bool {
         trace!("Removing {:?} from {}", pattern, slot);
 
@@ -209,10 +220,11 @@ impl Wave {
         self.slots.get_world(slot)
     }
 
-    fn remove_support(
-        &mut self, slot: &lat::Point, pattern: PatternId, offset: OffsetId
-    ) -> bool {
-        self.pattern_supports.get_mut_world(slot).get_mut(pattern).remove(offset)
+    fn remove_support(&mut self, slot: &lat::Point, pattern: PatternId, offset: OffsetId) -> bool {
+        self.pattern_supports
+            .get_mut_world(slot)
+            .get_mut(pattern)
+            .remove(offset)
     }
 }
 

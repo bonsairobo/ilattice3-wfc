@@ -80,7 +80,9 @@ impl PatternGroup {
     }
 
     pub fn iter_compatible(
-        &self, pattern: PatternId, offset: OffsetId
+        &self,
+        pattern: PatternId,
+        offset: OffsetId,
     ) -> impl Iterator<Item = PatternId> + '_ {
         self.constraints.iter_compatible(pattern, offset)
     }
@@ -149,7 +151,10 @@ where
     // Set the constraints and count pattern occurences.
     let num_patterns = patterns.len();
     if num_patterns > MAX_PATTERNS as usize {
-        panic!("Too many patterns ({}), maximum is {}", num_patterns, MAX_PATTERNS);
+        panic!(
+            "Too many patterns ({}), maximum is {}",
+            num_patterns, MAX_PATTERNS
+        );
     }
     let mut pattern_constraints =
         SymmetricPatternConstraints::new(pattern_shape.offset_group.clone(), num_patterns as u16);
@@ -209,9 +214,15 @@ impl SymmetricPatternConstraints {
     }
 
     pub fn iter_compatible(
-        &self, pattern: PatternId, offset: OffsetId
+        &self,
+        pattern: PatternId,
+        offset: OffsetId,
     ) -> impl Iterator<Item = PatternId> + '_ {
-        self.constraints.get(pattern).get(offset).iter().map(|i| PatternId(i as u16))
+        self.constraints
+            .get(pattern)
+            .get(offset)
+            .iter()
+            .map(|i| PatternId(i as u16))
     }
 
     pub fn num_compatible(&self, pattern: PatternId, offset: OffsetId) -> u16 {
@@ -240,8 +251,10 @@ impl SymmetricPatternConstraints {
     /// For a fully undetermined `Wave`, return the support map for one slot.
     pub fn get_initial_support(&self) -> PatternMap<PatternSupport> {
         let mut pattern_supports = PatternMap::fill(
-            PatternSupport { counts: OffsetMap::fill(0, self.offset_group.num_offsets()) },
-            self.num_patterns() as usize
+            PatternSupport {
+                counts: OffsetMap::fill(0, self.offset_group.num_offsets()),
+            },
+            self.num_patterns() as usize,
         );
         for pattern in (0..self.num_patterns()).map(PatternId) {
             for offset in (0..self.offset_group.num_offsets()).map(OffsetId) {
@@ -273,7 +286,9 @@ impl PatternSupport {
     }
 
     pub fn clear(&mut self) {
-        self.counts.iter_mut().for_each(|(_offset, count)| *count = 0);
+        self.counts
+            .iter_mut()
+            .for_each(|(_offset, count)| *count = 0);
     }
 }
 
@@ -302,7 +317,8 @@ impl PatternSet {
         }
 
         PatternSet {
-            size: num_patterns, bits
+            size: num_patterns,
+            bits,
         }
     }
 
