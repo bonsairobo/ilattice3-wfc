@@ -91,7 +91,7 @@ fn process_args(args: &Args) -> ProcessedInput<PeriodicYLevelsIndexer> {
     let output_size = lat::Point::from(get_three_elements(&args.output_size));
 
     if args.gif.is_some() && output_size.z > 2 {
-        panic!("GIF output not supported for 3D input");
+        panic!("GIF output not supported for 3D output");
     }
 
     let mut seed = [0; NUM_SEED_BYTES];
