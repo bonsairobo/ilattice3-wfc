@@ -136,7 +136,7 @@ where
     // Set the constraints and count pattern occurences.
     let num_patterns = patterns.len();
     let mut pattern_constraints =
-        SymmetricPatternConstraints::new(pattern_shape.offset_group.clone(), num_patterns);
+        SymmetricPatternConstraints::new(pattern_shape.offset_group.clone(), num_patterns as u32);
     for pattern_point in full_extent.into_iter() {
         let pattern = *pattern_lattice.get_local(&pattern_point);
         debug_assert!(pattern != EMPTY_PATTERN_ID);
@@ -163,31 +163,33 @@ pub type PatternRepresentatives = PatternMap<lat::Extent>;
 
 /// Used to build the set of pattern relations. Enforces symmetry of the `compatible` relation.
 pub struct SymmetricPatternConstraints {
-    constraints: PatternMap<PatternConstraints>,
+    constraints: PatternMap<OffsetMap<BitSet>>,
     pub(crate) offset_group: OffsetGroup,
+    num_patterns: u32,
 }
 
 impl SymmetricPatternConstraints {
-    pub fn new(offset_group: OffsetGroup, num_patterns: usize) -> Self {
+    pub fn new(offset_group: OffsetGroup, num_patterns: u32) -> Self {
         Self {
             constraints: PatternMap::fill(
-                PatternConstraints::new(offset_group.num_offsets()),
-                num_patterns,
+                OffsetMap::fill(BitSet::new(), offset_group.num_offsets()),
+                num_patterns as usize,
             ),
             offset_group,
+            num_patterns,
         }
     }
 
     fn assert_valid(&self) {
         for (_, c) in self.constraints.iter() {
             for i in 0..self.offset_group.num_offsets() {
-                assert!(!c.allowed_adjacent_patterns.get(OffsetId(i)).is_empty());
+                assert!(!c.get(OffsetId(i)).is_empty());
             }
         }
     }
 
     pub fn num_patterns(&self) -> u32 {
-        self.constraints.num_elements() as u32
+        self.num_patterns
     }
 
     /// Returns whether `pattern` is compatible with `offset_pattern` in the configuration where
@@ -201,7 +203,6 @@ impl SymmetricPatternConstraints {
     ) -> bool {
         self.constraints
             .get(pattern)
-            .allowed_adjacent_patterns
             .get(offset)
             .contains(offset_pattern.0)
     }
@@ -215,43 +216,35 @@ impl SymmetricPatternConstraints {
         let offset_id = self.offset_group.offset_id(offset);
         self.constraints
             .get_mut(pattern)
-            .allowed_adjacent_patterns
             .get_mut(offset_id)
             .add(offset_pattern.0);
 
         let opposite_id = self.offset_group.offset_id(&-*offset);
         self.constraints
             .get_mut(offset_pattern)
-            .allowed_adjacent_patterns.get_mut(opposite_id)
+            .get_mut(opposite_id)
             .add(pattern.0);
     }
 
     /// For a fully undetermined `Wave`, return the support map for one slot.
     pub fn get_initial_support(&self) -> PatternMap<PatternSupport> {
-        let pattern_supports = self.constraints.iter().map(|(_pattern, constraints)| {
-            let mut counts = OffsetMap::fill(0, self.offset_group.num_offsets());
-            constraints.allowed_adjacent_patterns.iter().for_each(|(offset, patterns)| {
-                *counts.get_mut(offset) = patterns.iter().count() as u32;
-            });
-
-            PatternSupport::new(counts)
-        }).collect();
-
-        PatternMap::new(pattern_supports)
-    }
-}
-
-/// At each offset, the set of patterns that are compatible with another pattern.
-#[derive(Clone)]
-struct PatternConstraints {
-    allowed_adjacent_patterns: OffsetMap<BitSet>,
-}
-
-impl PatternConstraints {
-    fn new(num_offsets: usize) -> Self {
-        PatternConstraints {
-            allowed_adjacent_patterns: OffsetMap::fill(BitSet::new(), num_offsets),
+        let mut pattern_supports = PatternMap::fill(
+            PatternSupport { counts: OffsetMap::fill(0, self.offset_group.num_offsets()) },
+            self.num_patterns() as usize
+        );
+        for pattern in (0..self.num_patterns()).map(|p| PatternId(p)) {
+            for offset in (0..self.offset_group.num_offsets()).map(|o| OffsetId(o)) {
+                // If P1 allows P2 to be at offset, then P2 allows P1 to be at -offset.
+                *pattern_supports.get_mut(pattern).counts.get_mut(offset) =
+                    self.constraints
+                        .get(pattern)
+                        .get(self.offset_group.opposite(offset))
+                        .iter()
+                        .count() as u32;
+            }
         }
+
+        pattern_supports
     }
 }
 
@@ -264,10 +257,6 @@ pub struct PatternSupport {
 }
 
 impl PatternSupport {
-    fn new(counts: OffsetMap<u32>) -> Self {
-        PatternSupport { counts }
-    }
-
     /// Returns `true` iff `pattern` no longer gives any support.
     pub fn remove_support(&mut self, offset: OffsetId) -> bool {
         let count = self.counts.get_mut(offset);
