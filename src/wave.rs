@@ -15,9 +15,9 @@ pub struct Wave {
     entropy_cache: Lattice<SlotEntropyCache>,
     remaining_pattern_count: usize,
 
-    /// Probably the most complex part of the wave. This is an important optimization that captures
-    /// each pattern's remaining support in each direction. Once a given pattern P, for any offset,
-    /// has no supporting patterns at that offset, P is no longer possible.
+    /// This is an important optimization that counts each pattern's remaining support in each
+    /// direction. Once a given pattern P, for any offset, has no supporting patterns at that
+    /// offset, P is no longer possible.
     pattern_supports: Lattice<PatternMap<PatternSupport>>,
 }
 
