@@ -57,10 +57,12 @@ fn main(args: Args) -> Result<(), std::io::Error> {
     Ok(())
 }
 
+pub const NUM_SEED_BYTES: usize = 16;
+
 struct ProcessedInput<I> {
     input_lattice: Lattice<u32, I>,
     pattern_shape: PatternShape,
-    seed: [u8; 32],
+    seed: [u8; NUM_SEED_BYTES],
     output_size: lat::Point,
     num_dimensions: usize,
 }
@@ -68,9 +70,9 @@ struct ProcessedInput<I> {
 fn process_args(args: &Args) -> ProcessedInput<PeriodicYLevelsIndexer> {
     let indexer = PeriodicYLevelsIndexer {};
 
-    let mut seed = [0; 32];
+    let mut seed = [0; NUM_SEED_BYTES];
     let seed_bytes = args.seed.as_bytes();
-    seed[..seed_bytes.len().min(32)].clone_from_slice(seed_bytes);
+    seed[..seed_bytes.len().min(NUM_SEED_BYTES)].clone_from_slice(seed_bytes);
 
     if args.pattern_size.len() != 3 {
         panic!("Pattern size must specify 3 dimensions");

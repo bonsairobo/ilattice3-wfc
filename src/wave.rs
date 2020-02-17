@@ -53,7 +53,6 @@ impl Wave {
         self.remaining_pattern_count == self.slots.get_extent().volume()
     }
 
-    // TODO: optimize sampling
     pub fn choose_lowest_entropy_slot<R: Rng>(&self, rng: &mut R) -> (lat::Point, f32) {
         self.entropy_cache
             .get_extent()

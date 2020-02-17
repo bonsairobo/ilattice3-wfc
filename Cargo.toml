@@ -21,6 +21,6 @@ ilattice3 = { git = "https://github.com/bonsairobo/ilattice3" }
 image = "*"
 log = "*"
 paw = "*"
-rand = "*"
+rand = { version = "*", features = ["small_rng"] }
 rand_distr = "*"
 structopt = { version = "*", features = ["paw"] }

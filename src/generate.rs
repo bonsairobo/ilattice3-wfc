@@ -6,19 +6,19 @@ use crate::{
 use ilattice3 as lat;
 use ilattice3::Lattice;
 use log::{debug, trace, warn};
-use rand::prelude::*;
+use rand::{prelude::*, rngs::SmallRng};
 
 /// Generates a `Lattice<PatternId>` using the overlapping "Wave Function Collapse" algorithm.
 pub struct Generator {
-    rng: StdRng,
+    rng: SmallRng,
     wave: Wave,
 }
 
 impl Generator {
-    pub fn new(seed: [u8; 32], output_size: lat::Point, pattern_group: &PatternGroup) -> Self {
+    pub fn new(seed: [u8; 16], output_size: lat::Point, pattern_group: &PatternGroup) -> Self {
         Generator {
             wave: Wave::new(pattern_group, output_size),
-            rng: StdRng::from_seed(seed),
+            rng: SmallRng::from_seed(seed),
         }
     }
 
