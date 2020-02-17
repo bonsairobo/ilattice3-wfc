@@ -37,11 +37,11 @@ struct Args {
     gif: Option<PathBuf>,
 
     /// Take one GIF frame for every N updates of the generator.
-    #[structopt(short, long, default_value = "1")]
+    #[structopt(long, default_value = "1")]
     skip_frames: usize,
 
     /// Path where the pattern palette image should be saved. Only supported for 2D images.
-    #[structopt(short, long, parse(from_os_str))]
+    #[structopt(long, parse(from_os_str))]
     palette: Option<PathBuf>,
 
     /// A log config string, e.g. "info" or "debug, module = trace".
