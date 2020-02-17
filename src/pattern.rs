@@ -19,7 +19,7 @@ pub struct PatternShape {
 /// Metadata about configurations of voxels, called "patterns," and how they are related.
 pub struct PatternSet {
     /// Count of each pattern in the source lattice. Equivalently, a prior distribution of patterns.
-    weights: PatternData<u32>,
+    weights: PatternMap<u32>,
     /// One set of constraints for each pattern.
     pub(crate) constraints: SymmetricPatternConstraints,
 }
@@ -45,7 +45,7 @@ impl Id for PatternId {}
 const EMPTY_PATTERN_ID: PatternId = PatternId(std::u32::MAX);
 
 impl PatternSet {
-    pub fn new(weights: PatternData<u32>, constraints: SymmetricPatternConstraints) -> Self {
+    pub fn new(weights: PatternMap<u32>, constraints: SymmetricPatternConstraints) -> Self {
         let me = PatternSet {
             weights,
             constraints,
@@ -130,7 +130,7 @@ where
         *pattern_lattice.get_mut_local(&pattern_point) = *pattern_id;
     }
 
-    let mut pattern_weights = PatternData::new(pattern_weights);
+    let mut pattern_weights = PatternMap::new(pattern_weights);
 
     // Set the constraints and count pattern occurences.
     let num_patterns = patterns.len();
@@ -158,18 +158,18 @@ where
     )
 }
 
-pub type PatternRepresentatives = PatternData<lat::Extent>;
+pub type PatternRepresentatives = PatternMap<lat::Extent>;
 
 /// Enforces symmetry of the `compatible` relation.
 pub struct SymmetricPatternConstraints {
-    constraints: PatternData<PatternConstraints>,
+    constraints: PatternMap<PatternConstraints>,
     pub(crate) offset_group: OffsetGroup,
 }
 
 impl SymmetricPatternConstraints {
     pub fn new(offset_group: OffsetGroup, num_patterns: usize) -> Self {
         Self {
-            constraints: PatternData::fill(
+            constraints: PatternMap::fill(
                 PatternConstraints::new(offset_group.num_offsets()),
                 num_patterns,
             ),
@@ -234,7 +234,7 @@ impl PatternConstraints {
     }
 }
 
-pub type PatternColors = PatternData<[u8; 4]>;
+pub type PatternColors = PatternMap<[u8; 4]>;
 
 pub fn find_pattern_colors<I: LatticeIndexer>(
     lattice: &Lattice<u32, I>,
@@ -243,4 +243,4 @@ pub fn find_pattern_colors<I: LatticeIndexer>(
     representatives.map(|e| unsafe { std::mem::transmute(*lattice.get_local(&e.get_minimum())) })
 }
 
-type PatternData<T> = StaticVec<PatternId, T>;
+type PatternMap<T> = StaticVec<PatternId, T>;
