@@ -186,8 +186,7 @@ fn generate(
     let pattern_colors = find_pattern_colors(&input_lattice, &representatives);
 
     let volume = lat::Extent::from_min_and_local_supremum([0, 0, 0].into(), output_size).volume();
-    let total_num_removals = volume * (pattern_group.num_patterns() - 1) as usize;
-    let progress_bar = ProgressBar::new(total_num_removals as u64);
+    let progress_bar = ProgressBar::new(volume as u64);
 
     let mut generator = Generator::new(seed, output_size, &pattern_group);
     let mut frames = Vec::new();
@@ -209,9 +208,7 @@ fn generate(
             break;
         }
 
-        let num_removals_now =
-            total_num_removals + volume - generator.get_remaining_pattern_count();
-        progress_bar.set_position(num_removals_now as u64);
+        progress_bar.set_position(generator.num_collapsed() as u64);
 
         if args.gif.is_some() && num_updates % args.skip_frames == 0 {
             let superposition = color_superposition(generator.get_wave_lattice(), &pattern_colors);

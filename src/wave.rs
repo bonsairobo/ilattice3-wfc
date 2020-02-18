@@ -12,7 +12,7 @@ use rand::prelude::*;
 /// could go in each slot of the output, as well as related acceleration data structures.
 pub struct Wave {
     /// Sum of the possible patterns in each slot.
-    remaining_pattern_count: usize,
+    collapsed_count: usize,
 
     /// The set of possible patterns at each slot.
     slots: Lattice<PatternSet>,
@@ -32,8 +32,6 @@ impl Wave {
 
         let extent = lat::Extent::from_min_and_world_supremum([0, 0, 0].into(), output_size);
         let slots = Lattice::fill(extent, all_possible.clone());
-        let remaining_pattern_count =
-            slots.get_extent().volume() * pattern_group.num_patterns() as usize;
 
         let initial_entropy = slot_entropy(pattern_group, &all_possible);
         debug!("Initial entropy = {:?}", initial_entropy);
@@ -44,24 +42,28 @@ impl Wave {
 
         Wave {
             slots,
-            remaining_pattern_count,
+            collapsed_count: 0,
             entropy_cache,
             pattern_supports,
         }
     }
 
-    pub fn get_remaining_pattern_count(&self) -> usize {
-        self.remaining_pattern_count
+    pub fn num_slots(&self) -> usize {
+        self.slots.get_extent().volume()
+    }
+
+    pub fn num_collapsed(&self) -> usize {
+        self.collapsed_count
     }
 
     pub fn determined(&self) -> bool {
-        self.remaining_pattern_count == self.slots.get_extent().volume()
+        self.collapsed_count == self.num_slots()
     }
 
     pub fn choose_least_entropy_slot<R: Rng>(&self, rng: &mut R) -> (lat::Point, f32) {
         // Micro-optimization: Don't use the extent iterator, just linear indices. It's involves far
         // less arithmetic and branching.
-        (0..self.entropy_cache.get_extent().volume())
+        (0..self.num_slots())
             .map(|linear_index| {
                 let noise: f32 = rng.gen();
                 let cache = *self.entropy_cache.get_linear(linear_index);
@@ -85,6 +87,8 @@ impl Wave {
         let possible_patterns = self.get_slot(slot);
         let pattern = pattern_group.sample_pattern(possible_patterns, rng);
         debug!("Assigning {:?}", pattern);
+
+        // TODO: just keep the removals vec on self and update it on remove_pattern
         let removed_patterns = self.collapse_slot(pattern_group, slot, pattern);
         let past_removals = removed_patterns.into_iter().map(|p| (*slot, p)).collect();
 
@@ -165,11 +169,10 @@ impl Wave {
         if num_remaining_patterns_in_slot == 1 {
             // Don't want to choose this slot again.
             self.set_max_entropy(slot);
+            self.collapsed_count += 1;
         } else {
             self.reduce_entropy(pattern_group, slot, pattern);
         }
-
-        self.remaining_pattern_count -= 1;
 
         // Even though this pattern is being removed, it may still have support at some offsets.
         // Just clear that support now so we don't trigger another removal.

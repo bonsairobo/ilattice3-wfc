@@ -273,6 +273,7 @@ impl SymmetricPatternConstraints {
 /// is not possible.
 #[derive(Clone)]
 pub struct PatternSupport {
+    // TODO: make this i16, since we can never have more support than to total number of patterns
     counts: OffsetMap<i32>,
 }
 

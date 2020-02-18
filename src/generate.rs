@@ -39,15 +39,15 @@ impl Generator {
             .map(|possible_patterns: &PatternSet| possible_patterns.iter().next().unwrap())
     }
 
-    pub fn get_remaining_pattern_count(&self) -> usize {
-        self.wave.get_remaining_pattern_count()
+    pub fn num_collapsed(&self) -> usize {
+        self.wave.num_collapsed()
     }
 
     pub fn update(&mut self, pattern_group: &PatternGroup) -> UpdateResult {
         let (slot, entropy) = self.wave.choose_least_entropy_slot(&mut self.rng);
         debug!(
-            "{} candidate patterns remaining; chose slot {} with least entropy {}",
-            self.wave.get_remaining_pattern_count(),
+            "{} collapsed slots; chose slot {} with least entropy {}",
+            self.wave.num_collapsed(),
             slot,
             entropy
         );
