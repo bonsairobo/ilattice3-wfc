@@ -191,7 +191,7 @@ impl Wave {
         pattern_group: &PatternGroup,
         slot: &lat::Point,
         assign_pattern: PatternId,
-    ) -> Vec<PatternId> {
+    ) {
         let remove_patterns: Vec<PatternId> = {
             let set = self.slots.get_mut_world(slot);
 
@@ -200,8 +200,6 @@ impl Wave {
         for pattern in remove_patterns.iter() {
             self.remove_pattern(pattern_group, slot, *pattern);
         }
-
-        remove_patterns
     }
 
     fn reduce_entropy(
