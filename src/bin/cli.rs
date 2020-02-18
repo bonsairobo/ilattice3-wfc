@@ -224,7 +224,7 @@ fn generate(
         num_updates += 1;
     }
 
-    progress_bar.finish();
+    progress_bar.finish_at_current_pos();
 
     if success {
         // TODO: support saving 3D lattice for viewing (RON format?)
