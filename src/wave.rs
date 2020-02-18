@@ -8,16 +8,20 @@ use ilattice3::Lattice;
 use log::{debug, trace, warn};
 use rand::prelude::*;
 
-/// The possible remaining patterns that could go in each slot of the output. The colloquial "wave
-/// function" to be collapsed.
+/// The colloquial "wave function" to be collapsed. Stores the possible remaining patterns that
+/// could go in each slot of the output, as well as related acceleration data structures.
 pub struct Wave {
-    slots: Lattice<PatternSet>,
-    entropy_cache: Lattice<SlotEntropyCache>,
+    /// Sum of the possible patterns in each slot.
     remaining_pattern_count: usize,
 
-    /// This is an important optimization that counts each pattern's remaining support in each
-    /// direction. Once a given pattern P, for any offset, has no supporting patterns at that
-    /// offset, P is no longer possible.
+    /// The set of possible patterns at each slot.
+    slots: Lattice<PatternSet>,
+
+    /// The current entropy of each slot. It's faster to store this than recompute every frame.
+    entropy_cache: Lattice<SlotEntropyCache>,
+
+    /// Counts each pattern's remaining support at each offset. Once a given pattern P, for any
+    /// offset, has no supporting patterns at that offset, P is no longer possible.
     pattern_supports: Lattice<PatternMap<PatternSupport>>,
 }
 
