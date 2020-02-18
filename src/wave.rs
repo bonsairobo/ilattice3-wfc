@@ -23,6 +23,10 @@ pub struct Wave {
     /// Counts each pattern's remaining support at each offset. Once a given pattern P, for any
     /// offset, has no supporting patterns at that offset, P is no longer possible.
     pattern_supports: Lattice<PatternMap<PatternSupport>>,
+
+    /// Container of patterns remove from slots. Currently used as a stack, but could eventually be
+    /// used as a log for backtracking.
+    removal_stack: Vec<(SlotId, PatternId)>,
 }
 
 impl Wave {
@@ -45,6 +49,7 @@ impl Wave {
             collapsed_count: 0,
             entropy_cache,
             pattern_supports,
+            removal_stack: Vec::new(),
         }
     }
 
@@ -88,25 +93,23 @@ impl Wave {
         let pattern = pattern_group.sample_pattern(possible_patterns, rng);
         debug!("Assigning {:?}", pattern);
 
-        // TODO: just keep the removals vec on self and update it on remove_pattern
-        let removed_patterns = self.collapse_slot(pattern_group, slot, pattern);
-        let past_removals = removed_patterns.into_iter().map(|p| (*slot, p)).collect();
+        self.collapse_slot(pattern_group, slot, pattern);
 
-        self.propagate_constraints(&pattern_group, past_removals)
+        self.propagate_constraints(&pattern_group)
     }
 
     /// Returns `false` iff we find a slot with no possible patterns.
     fn propagate_constraints(
         &mut self,
         pattern_group: &PatternGroup,
-        mut past_removals: Vec<(lat::Point, PatternId)>,
     ) -> bool {
         // This algorithm is similar to flood fill, but each slot may need to be visited multiple
         // times.
-        while !past_removals.is_empty() {
+        while !self.removal_stack.is_empty() {
             // We know that this pattern is not longer possible at `visit_slot`, so no adjacent
             // patterns can use it as support.
-            let (visit_slot, impossible_at_visit_slot) = past_removals.pop().unwrap();
+            let (visit_slot, impossible_at_visit_slot) = self.removal_stack.pop().unwrap();
+            let visit_slot = self.slots.local_point_from_index(visit_slot.0);
             trace!(
                 "Visiting {} that removed {:?}",
                 visit_slot,
@@ -136,7 +139,6 @@ impl Wave {
                         trace!("No support remaining");
                         let slot_empty =
                             self.remove_pattern(pattern_group, &offset_slot, offset_pattern);
-                        past_removals.push((offset_slot, offset_pattern));
                         if slot_empty {
                             // Failed to fully assign the output lattice. Give up.
                             warn!("No possible patterns for {}", offset_slot);
@@ -178,6 +180,8 @@ impl Wave {
         // Just clear that support now so we don't trigger another removal.
         let support = self.pattern_supports.get_mut_world(slot).get_mut(pattern);
         support.clear();
+
+        self.removal_stack.push((SlotId(self.slots.index_from_local_point(slot)), pattern));
 
         false
     }
@@ -278,3 +282,6 @@ fn slot_entropy(pattern_group: &PatternGroup, possible_patterns: &PatternSet) ->
         entropy,
     }
 }
+
+/// Linear index of a slot in the wave lattice.
+struct SlotId(usize);
