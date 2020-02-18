@@ -87,6 +87,15 @@ impl PatternGroup {
         self.constraints.iter_compatible(pattern, offset)
     }
 
+    pub fn are_compatible(
+        &self,
+        pattern: PatternId,
+        offset_pattern: PatternId,
+        offset: OffsetId,
+    ) -> bool {
+        self.constraints.are_compatible(pattern, offset_pattern, offset)
+    }
+
     /// Sample the possible patterns by their probability (weights) in the source data.
     pub fn sample_pattern<R>(&self, possible_patterns: &PatternSet, rng: &mut R) -> PatternId
     where
@@ -223,6 +232,18 @@ impl SymmetricPatternConstraints {
             .get(offset)
             .iter()
             .map(|i| PatternId(i as u16))
+    }
+
+    pub fn are_compatible(
+        &self,
+        pattern: PatternId,
+        offset_pattern: PatternId,
+        offset: OffsetId,
+    ) -> bool {
+        self.constraints
+            .get(pattern)
+            .get(offset)
+            .contains(offset_pattern.0 as u32)
     }
 
     pub fn num_compatible(&self, pattern: PatternId, offset: OffsetId) -> u16 {

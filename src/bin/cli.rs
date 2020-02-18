@@ -194,7 +194,9 @@ fn generate(
     let mut num_updates = 0;
     println!("Starting generator");
     loop {
-        match generator.update(&pattern_group) {
+        let state = generator.update(&pattern_group);
+        progress_bar.set_position(generator.num_collapsed() as u64);
+        match state {
             UpdateResult::Success => break,
             UpdateResult::Failure => {
                 success = false;
@@ -207,8 +209,6 @@ fn generate(
             success = false;
             break;
         }
-
-        progress_bar.set_position(generator.num_collapsed() as u64);
 
         if args.gif.is_some() && num_updates % args.skip_frames == 0 {
             let superposition = color_superposition(generator.get_wave_lattice(), &pattern_colors);

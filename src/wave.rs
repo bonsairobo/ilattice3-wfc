@@ -72,7 +72,7 @@ impl Wave {
             .map(|linear_index| {
                 let noise: f32 = rng.gen();
                 let cache = *self.entropy_cache.get_linear(linear_index);
-                let entropy = cache.entropy + 0.001 * noise;
+                let entropy = cache.entropy + 0.1 * noise;
 
                 (linear_index, entropy)
             })
@@ -152,6 +152,31 @@ impl Wave {
         true
     }
 
+    /// Verify that this slot is actually impossible based on the constraints alone. To appease my
+    /// paranoia.
+    fn assert_slot_has_contradiction(
+        &self, pattern_group: &PatternGroup, impossible_slot: &lat::Point
+    ) {
+        // Panic if we find any pattern that's supported by some possible pattern at each offset.
+        'check_pattern: for pattern in 0..pattern_group.num_patterns() {
+            let pattern = PatternId(pattern);
+            'check_offset: for (offset_id, offset) in pattern_group.get_offset_group().iter() {
+                let offset_slot = *impossible_slot + *offset;
+                for offset_pattern in self.slots.get_local(&offset_slot).iter() {
+                    if pattern_group.are_compatible(pattern, offset_pattern, offset_id) {
+                        // Offset pattern is compatible with our pattern. Check the next offset.
+                        continue 'check_offset;
+                    }
+                }
+                // This offset doesn't have any compatible patterns, so our pattern is impossible.
+                // Try the next pattern.
+                continue 'check_pattern;
+            }
+
+            panic!("Pattern {:?} is possible at slot {}", pattern, impossible_slot);
+        }
+    }
+
     /// Returns `true` iff the slot is empty after removal.
     fn remove_pattern(
         &mut self,
@@ -166,6 +191,7 @@ impl Wave {
 
         let num_remaining_patterns_in_slot = possible_slot_patterns.len();
         if num_remaining_patterns_in_slot == 0 {
+            self.assert_slot_has_contradiction(pattern_group, slot);
             return true;
         }
         if num_remaining_patterns_in_slot == 1 {
