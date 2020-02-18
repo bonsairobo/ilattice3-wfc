@@ -59,17 +59,18 @@ impl Wave {
     }
 
     pub fn choose_least_entropy_slot<R: Rng>(&self, rng: &mut R) -> (lat::Point, f32) {
-        self.entropy_cache
-            .get_extent()
-            .into_iter()
-            .map(|s| {
+        // Micro-optimization: Don't use the extent iterator, just linear indices. It's involves far
+        // less arithmetic and branching.
+        (0..self.entropy_cache.get_extent().volume())
+            .map(|linear_index| {
                 let noise: f32 = rng.gen();
-                let cache = *self.entropy_cache.get_world(&s);
+                let cache = *self.entropy_cache.get_linear(linear_index);
                 let entropy = cache.entropy + 0.001 * noise;
 
-                (s, entropy)
+                (linear_index, entropy)
             })
             .min_by(|(_, e1), (_, e2)| e1.partial_cmp(&e2).expect("Unexpected NaN"))
+            .map(|(i, e)| (self.entropy_cache.local_point_from_index(i), e))
             .unwrap()
     }
 

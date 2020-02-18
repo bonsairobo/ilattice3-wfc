@@ -209,7 +209,8 @@ fn generate(
             break;
         }
 
-        let num_removals_now = total_num_removals - generator.get_remaining_pattern_count();
+        let num_removals_now =
+            total_num_removals + volume - generator.get_remaining_pattern_count();
         progress_bar.set_position(num_removals_now as u64);
 
         if args.gif.is_some() && num_updates % args.skip_frames == 0 {
