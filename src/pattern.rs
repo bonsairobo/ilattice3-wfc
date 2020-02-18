@@ -260,7 +260,7 @@ impl SymmetricPatternConstraints {
             for offset in (0..self.offset_group.num_offsets()).map(OffsetId) {
                 // If P1 allows P2 to be at offset, then P2 allows P1 to be at -offset.
                 *pattern_supports.get_mut(pattern).counts.get_mut(offset) =
-                    self.num_compatible(pattern, self.offset_group.opposite(offset)) as i32;
+                    self.num_compatible(pattern, self.offset_group.opposite(offset)) as i16;
             }
         }
 
@@ -273,8 +273,7 @@ impl SymmetricPatternConstraints {
 /// is not possible.
 #[derive(Clone)]
 pub struct PatternSupport {
-    // TODO: make this i16, since we can never have more support than to total number of patterns
-    counts: OffsetMap<i32>,
+    counts: OffsetMap<i16>,
 }
 
 impl PatternSupport {
