@@ -98,7 +98,8 @@ fn process_args(args: &Args) -> ProcessedInput<PeriodicYLevelsIndexer> {
 
     let mut seed = [0; NUM_SEED_BYTES];
     let seed_bytes = args.seed.as_bytes();
-    seed[..seed_bytes.len().min(NUM_SEED_BYTES)].clone_from_slice(seed_bytes);
+    let copy_bytes = seed_bytes.len().min(NUM_SEED_BYTES);
+    seed[..copy_bytes].clone_from_slice(&seed_bytes[..copy_bytes]);
 
     let extension = args
         .input_path
