@@ -99,10 +99,7 @@ impl Wave {
     }
 
     /// Returns `false` iff we find a slot with no possible patterns.
-    fn propagate_constraints(
-        &mut self,
-        pattern_group: &PatternGroup,
-    ) -> bool {
+    fn propagate_constraints(&mut self, pattern_group: &PatternGroup) -> bool {
         // This algorithm is similar to flood fill, but each slot may need to be visited multiple
         // times.
         while !self.removal_stack.is_empty() {
@@ -155,7 +152,9 @@ impl Wave {
     /// Verify that this slot is actually impossible based on the constraints alone. To appease my
     /// paranoia.
     fn assert_slot_has_contradiction(
-        &self, pattern_group: &PatternGroup, impossible_slot: &lat::Point
+        &self,
+        pattern_group: &PatternGroup,
+        impossible_slot: &lat::Point,
     ) {
         // Panic if we find any pattern that's supported by some possible pattern at each offset.
         'check_pattern: for pattern in 0..pattern_group.num_patterns() {
@@ -173,7 +172,10 @@ impl Wave {
                 continue 'check_pattern;
             }
 
-            panic!("Pattern {:?} is possible at slot {}", pattern, impossible_slot);
+            panic!(
+                "Pattern {:?} is possible at slot {}",
+                pattern, impossible_slot
+            );
         }
     }
 
@@ -207,7 +209,8 @@ impl Wave {
         let support = self.pattern_supports.get_mut_world(slot).get_mut(pattern);
         support.clear();
 
-        self.removal_stack.push((SlotId(self.slots.index_from_local_point(slot)), pattern));
+        self.removal_stack
+            .push((SlotId(self.slots.index_from_local_point(slot)), pattern));
 
         false
     }

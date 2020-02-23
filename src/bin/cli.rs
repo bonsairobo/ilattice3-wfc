@@ -1,9 +1,9 @@
 use ilattice3_wfc::*;
 
-use flexi_logger::{Logger, default_format};
+use dot_vox::DotVoxData;
+use flexi_logger::{default_format, Logger};
 use ilattice3 as lat;
-use ilattice3::{Lattice, PeriodicYLevelsIndexer};
-use image::{self, gif, Delay, Frame};
+use ilattice3::{Lattice, PeriodicYLevelsIndexer, VoxColor};
 use indicatif::ProgressBar;
 use std::fs::File;
 use std::path::PathBuf;
@@ -51,7 +51,7 @@ struct Args {
 }
 
 #[paw::main]
-fn main(args: Args) -> Result<(), std::io::Error> {
+fn main(args: Args) -> Result<(), CliError> {
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
     ctrlc::set_handler(move || r.store(false, Ordering::SeqCst))
@@ -65,22 +65,50 @@ fn main(args: Args) -> Result<(), std::io::Error> {
             .unwrap_or_else(|e| panic!("Logger initialization failed with {}", e));
     }
 
-    let input = process_args(&args);
+    let ProcessedInput {
+        input_lattice,
+        pattern_shape,
+        seed,
+        output_size,
+    } = process_args(&args)?;
 
-    generate(args, input, running)?;
+    match input_lattice {
+        InputLattice::Vox(lattice, color_palette) => generate_vox(
+            args,
+            seed,
+            pattern_shape,
+            lattice,
+            output_size,
+            color_palette,
+            running,
+        )?,
+        InputLattice::Image(lattice) => {
+            generate_image(args, seed, pattern_shape, lattice, output_size, running)?
+        }
+    }
 
     Ok(())
 }
 
 struct ProcessedInput<I> {
-    input_lattice: Lattice<u32, I>,
+    input_lattice: InputLattice<I>,
     pattern_shape: PatternShape,
     seed: [u8; NUM_SEED_BYTES],
     output_size: lat::Point,
-    num_dimensions: usize,
 }
 
-fn process_args(args: &Args) -> ProcessedInput<PeriodicYLevelsIndexer> {
+enum InputLattice<I> {
+    // Vox lattice stores indices into a color palette.
+    Vox(Lattice<VoxColor, I>, VoxColorPalette),
+    // Images just store the colors directly.
+    Image(Lattice<u32, I>),
+}
+
+struct VoxColorPalette {
+    colors: Vec<u32>,
+}
+
+fn process_args(args: &Args) -> Result<ProcessedInput<PeriodicYLevelsIndexer>, CliError> {
     let indexer = PeriodicYLevelsIndexer {};
 
     if args.pattern_size.len() != 3 {
@@ -105,18 +133,23 @@ fn process_args(args: &Args) -> ProcessedInput<PeriodicYLevelsIndexer> {
         .input_path
         .extension()
         .expect("Input file has no extention");
-    let (input_lattice, offset_group, num_dimensions) = if extension == "vox" {
+    let (input_lattice, offset_group) = if extension == "vox" {
         assert!(
             args.palette.is_none(),
             "Palette image only supported for 2D images"
         );
         let input_vox =
             dot_vox::load(args.input_path.to_str().unwrap()).expect("Failed to load VOX file");
+        let model_index = 0;
 
         (
-            Lattice::from_vox_with_indexer(indexer, &input_vox, 0),
+            InputLattice::Vox(
+                Lattice::from_vox_with_indexer(indexer, &input_vox, model_index),
+                VoxColorPalette {
+                    colors: input_vox.palette,
+                },
+            ),
             OffsetGroup::new(&face_3d_offsets()),
-            3,
         )
     } else {
         assert_eq!(
@@ -127,16 +160,15 @@ fn process_args(args: &Args) -> ProcessedInput<PeriodicYLevelsIndexer> {
             output_size.z, 1,
             "3D images not supported, use --output-size x y 1"
         );
-        let input_img = image::open(args.input_path.as_os_str()).unwrap();
+        let input_img = image::open(args.input_path.as_os_str())?;
 
         (
-            lattice_from_image(indexer, &input_img.to_rgba()),
+            InputLattice::Image(lattice_from_image(indexer, &input_img.to_rgba())),
             OffsetGroup::new(&edge_2d_offsets()),
-            2,
         )
     };
 
-    ProcessedInput {
+    Ok(ProcessedInput {
         input_lattice,
         pattern_shape: PatternShape {
             size: pattern_size,
@@ -144,8 +176,7 @@ fn process_args(args: &Args) -> ProcessedInput<PeriodicYLevelsIndexer> {
         },
         seed,
         output_size,
-        num_dimensions,
-    }
+    })
 }
 
 fn get_three_elements(v: &[i32]) -> [i32; 3] {
@@ -158,44 +189,102 @@ fn get_three_elements(v: &[i32]) -> [i32; 3] {
     elems
 }
 
-fn generate(
+fn generate_image(
     args: Args,
-    input: ProcessedInput<PeriodicYLevelsIndexer>,
+    seed: [u8; 16],
+    pattern_shape: PatternShape,
+    input_lattice: Lattice<u32, PeriodicYLevelsIndexer>,
+    output_size: lat::Point,
     running: Arc<AtomicBool>,
-) -> Result<(), std::io::Error> {
-    let ProcessedInput {
-        input_lattice,
-        pattern_shape,
-        seed,
-        output_size,
-        num_dimensions,
-    } = input;
-
-    println!("Trying to generate with seed {:?}", seed);
-
+) -> Result<(), CliError> {
     let (pattern_group, representatives) =
         process_patterns_in_lattice(&input_lattice, &pattern_shape);
-    println!("Found {} patterns in input lattice", pattern_group.num_patterns());
+    println!(
+        "Found {} patterns in input lattice",
+        pattern_group.num_patterns()
+    );
 
     if let Some(palette_path) = args.palette {
         // Save the palette image for debugging.
         let palette_lattice = make_palette_lattice(&input_lattice, &representatives);
         let palette_img = image_from_lattice(&palette_lattice);
-        palette_img.save(palette_path).unwrap();
+        palette_img.save(palette_path)?;
     }
 
-    let pattern_colors = find_pattern_colors(&input_lattice, &representatives);
+    let pattern_colors: PatternMap<[u8; 4]> =
+        find_pattern_colors_image(&input_lattice, &representatives);
+
+    let skip_frames = args.skip_frames;
+    let mut gif_maker = args
+        .gif
+        .map(|gif_path| GifMaker::new(gif_path, pattern_colors.clone(), skip_frames));
+
+    if let Some(result) = generate(seed, &pattern_group, output_size, &mut gif_maker, running) {
+        let colors = color_final_patterns_rgba(&result, &pattern_colors);
+        let final_img = image_from_lattice(&colors);
+        println!("Writing {:?}", args.output_path);
+        final_img.save(args.output_path)?;
+
+        if let Some(maker) = gif_maker {
+            maker.save()?;
+        }
+    }
+
+    Ok(())
+}
+
+fn generate_vox(
+    args: Args,
+    seed: [u8; 16],
+    pattern_shape: PatternShape,
+    input_lattice: Lattice<VoxColor, PeriodicYLevelsIndexer>,
+    output_size: lat::Point,
+    color_palette: VoxColorPalette,
+    running: Arc<AtomicBool>,
+) -> Result<(), std::io::Error> {
+    let (pattern_group, representatives) =
+        process_patterns_in_lattice(&input_lattice, &pattern_shape);
+    println!(
+        "Found {} patterns in input lattice",
+        pattern_group.num_patterns()
+    );
+
+    let pattern_colors: PatternMap<VoxColor> =
+        find_pattern_colors_vox(&input_lattice, &representatives);
+
+    if let Some(result) =
+        generate::<NilFrameConsumer>(seed, &pattern_group, output_size, &mut None, running)
+    {
+        let colors = color_final_patterns_vox(&result, &pattern_colors);
+        let mut vox_data: DotVoxData = colors.into();
+        vox_data.palette = color_palette.colors;
+        let mut out_file = File::create(args.output_path)?;
+        vox_data.write_vox(&mut out_file)?;
+    }
+
+    Ok(())
+}
+
+fn generate<F>(
+    seed: [u8; 16],
+    pattern_group: &PatternGroup,
+    output_size: lat::Point,
+    frame_consumer: &mut Option<F>,
+    running: Arc<AtomicBool>,
+) -> Option<Lattice<PatternId>>
+where
+    F: FrameConsumer,
+{
+    println!("Trying to generate with seed {:?}", seed);
 
     let volume = lat::Extent::from_min_and_local_supremum([0, 0, 0].into(), output_size).volume();
     let progress_bar = ProgressBar::new(volume as u64);
 
-    let mut generator = Generator::new(seed, output_size, &pattern_group);
-    let mut frames = Vec::new();
+    let mut generator = Generator::new(seed, output_size, pattern_group);
     let mut success = true;
-    let mut num_updates = 0;
-    println!("Starting generator");
+    println!("Generating...");
     loop {
-        let state = generator.update(&pattern_group);
+        let state = generator.update(pattern_group);
         progress_bar.set_position(generator.num_collapsed() as u64);
         match state {
             UpdateResult::Success => break,
@@ -205,52 +294,25 @@ fn generate(
             }
             UpdateResult::Continue => (),
         }
+
         // Can be interrupted by other threads.
         if !running.load(Ordering::SeqCst) {
             success = false;
             break;
         }
 
-        if args.gif.is_some() && num_updates % args.skip_frames == 0 {
-            let superposition = color_superposition(generator.get_wave_lattice(), &pattern_colors);
-            let superposition_img = image_from_lattice(&superposition);
-            frames.push(Frame::from_parts(
-                superposition_img,
-                0,
-                0,
-                Delay::from_numer_denom_ms(1, 1),
-            ));
+        if let Some(consumer) = frame_consumer {
+            consumer.use_frame(generator.get_wave_lattice());
         }
-
-        num_updates += 1;
     }
 
     progress_bar.finish_at_current_pos();
 
     if success {
-        // TODO: support saving 3D lattice for viewing (RON format?)
-        if num_dimensions == 3 {
-            return Ok(());
-        }
-
-        let result = generator.result();
-        let colors = color_final_patterns(&result, &pattern_colors);
-        let final_img = image_from_lattice(&colors);
-        println!("Writing {:?}", args.output_path);
-        final_img
-            .save(args.output_path)
-            .expect("Failed to save output image");
+        Some(generator.result())
     } else {
         println!("Failed to generate");
-    }
 
-    if let Some(gif_path) = args.gif {
-        println!("Writing {:?}", gif_path);
-        let file_out = File::create(&gif_path).unwrap();
-        gif::Encoder::new(file_out)
-            .encode_frames(frames.into_iter())
-            .unwrap();
+        None
     }
-
-    Ok(())
 }

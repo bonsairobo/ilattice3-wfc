@@ -5,7 +5,7 @@ use crate::{
 
 use hibitset::{BitSet, BitSetLike};
 use ilattice3 as lat;
-use ilattice3::{Lattice, LatticeIndexer, PeriodicYLevelsIndexer};
+use ilattice3::{Lattice, LatticeIndexer, PeriodicYLevelsIndexer, VoxColor};
 use rand::prelude::*;
 use rand_distr::weighted::WeightedIndex;
 use std::collections::HashMap;
@@ -93,7 +93,8 @@ impl PatternGroup {
         offset_pattern: PatternId,
         offset: OffsetId,
     ) -> bool {
-        self.constraints.are_compatible(pattern, offset_pattern, offset)
+        self.constraints
+            .are_compatible(pattern, offset_pattern, offset)
     }
 
     /// Sample the possible patterns by their probability (weights) in the source data.
@@ -180,6 +181,10 @@ where
             *pattern_weights.get_mut(pattern) += 1;
         }
     }
+
+    let mut sorted_weights = pattern_weights.get_raw().clone();
+    sorted_weights.sort();
+    println!("Weights = {:?}", sorted_weights);
 
     let pattern_group = PatternGroup::new(pattern_weights, pattern_constraints);
 
@@ -313,13 +318,18 @@ impl PatternSupport {
     }
 }
 
-pub type PatternColors = PatternMap<[u8; 4]>;
-
-pub fn find_pattern_colors<I: LatticeIndexer>(
+pub fn find_pattern_colors_image<I: LatticeIndexer>(
     lattice: &Lattice<u32, I>,
     representatives: &PatternRepresentatives,
-) -> PatternColors {
+) -> PatternMap<[u8; 4]> {
     representatives.map(|e| unsafe { std::mem::transmute(*lattice.get_local(&e.get_minimum())) })
+}
+
+pub fn find_pattern_colors_vox<I: LatticeIndexer>(
+    lattice: &Lattice<VoxColor, I>,
+    representatives: &PatternRepresentatives,
+) -> PatternMap<VoxColor> {
+    representatives.map(|e| *lattice.get_local(&e.get_minimum()))
 }
 
 pub type PatternMap<T> = StaticVec<PatternId, T>;

@@ -14,7 +14,9 @@ path = "src/lib.rs"
 
 [dependencies]
 ctrlc = "*"
-dot_vox = "*"
+# dot_vox = "*"
+# Forked to add ability to save VOX files
+dot_vox = { git = "https://github.com/bonsairobo/dot_vox" }
 flexi_logger = "*"
 hibitset = "*"
 ilattice3 = { git = "https://github.com/bonsairobo/ilattice3" }

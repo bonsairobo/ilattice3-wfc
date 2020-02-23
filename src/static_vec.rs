@@ -57,4 +57,8 @@ impl<I: Id, T> StaticVec<I, T> {
             .enumerate()
             .map(|(i, d)| (I::from(i), d))
     }
+
+    pub fn get_raw(&self) -> &Vec<T> {
+        &self.data
+    }
 }

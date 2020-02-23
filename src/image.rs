@@ -1,10 +1,15 @@
 //! Utilities for using images. Mostly for testing the algorithms on 2D images.
 
-use crate::pattern::{PatternColors, PatternId, PatternRepresentatives, PatternSet};
+use crate::{
+    pattern::{PatternId, PatternMap, PatternRepresentatives, PatternSet},
+    CliError, FrameConsumer,
+};
 
 use ilattice3 as lat;
-use ilattice3::{Lattice, LatticeIndexer};
-use image::{self, Rgba, RgbaImage};
+use ilattice3::{Lattice, LatticeIndexer, VoxColor};
+use image::{self, gif, Delay, Frame, Rgba, RgbaImage};
+use std::fs::File;
+use std::path::PathBuf;
 
 pub fn lattice_from_image<I: LatticeIndexer>(indexer: I, img: &RgbaImage) -> Lattice<u32, I> {
     let size = [img.width() as i32, img.height() as i32, 1].into();
@@ -38,7 +43,7 @@ pub fn image_from_lattice<I: LatticeIndexer>(lattice: &Lattice<u32, I>) -> RgbaI
         buf[i..(4 + i)].clone_from_slice(&rgba[..4]);
     }
 
-    RgbaImage::from_raw(width as u32, height as u32, buf).unwrap()
+    RgbaImage::from_raw(width as u32, height as u32, buf).expect("Invalid image buffer")
 }
 
 pub fn rgba_from_integer(i: u32) -> [u8; 4] {
@@ -63,7 +68,10 @@ pub fn make_palette_lattice<I: LatticeIndexer + Copy>(
     palette_lattice
 }
 
-pub fn color_superposition(lattice: &Lattice<PatternSet>, colors: &PatternColors) -> Lattice<u32> {
+pub fn color_superposition(
+    lattice: &Lattice<PatternSet>,
+    colors: &PatternMap<[u8; 4]>,
+) -> Lattice<u32> {
     let mut color_lattice = Lattice::fill(lattice.get_extent(), 0);
     for p in &color_lattice.get_extent() {
         let mut color_sum = [0.0; 4];
@@ -85,13 +93,83 @@ pub fn color_superposition(lattice: &Lattice<PatternSet>, colors: &PatternColors
     color_lattice
 }
 
-pub fn color_final_patterns(lattice: &Lattice<PatternId>, colors: &PatternColors) -> Lattice<u32> {
-    let mut color_lattice = Lattice::fill(lattice.get_extent(), 0);
+fn color_final_patterns<C, T, F>(
+    lattice: &Lattice<PatternId>,
+    colors: &PatternMap<C>,
+    converter: F,
+) -> Lattice<T>
+where
+    C: Copy,
+    F: Fn(C) -> T,
+    T: Clone + Default,
+{
+    let mut color_lattice = Lattice::fill(lattice.get_extent(), T::default());
     for p in &color_lattice.get_extent() {
         let pattern = lattice.get_world(&p);
         let color = colors.get(*pattern);
-        *color_lattice.get_mut_local(&p) = integer_from_rgba(Rgba(*color));
+        *color_lattice.get_mut_local(&p) = converter(*color);
     }
 
     color_lattice
+}
+
+pub fn color_final_patterns_rgba(
+    lattice: &Lattice<PatternId>,
+    colors: &PatternMap<[u8; 4]>,
+) -> Lattice<u32> {
+    let rgba_converter = |c| integer_from_rgba(Rgba(c));
+
+    color_final_patterns(lattice, colors, rgba_converter)
+}
+
+pub fn color_final_patterns_vox(
+    lattice: &Lattice<PatternId>,
+    colors: &PatternMap<VoxColor>,
+) -> Lattice<VoxColor> {
+    color_final_patterns(lattice, colors, |c| c)
+}
+
+pub struct GifMaker {
+    path: PathBuf,
+    pattern_colors: PatternMap<[u8; 4]>,
+    frames: Vec<Frame>,
+    num_updates: usize,
+    skip_frames: usize,
+}
+
+impl FrameConsumer for GifMaker {
+    fn use_frame(&mut self, slots: &Lattice<PatternSet>) {
+        if self.num_updates % self.skip_frames == 0 {
+            let superposition = color_superposition(slots, &self.pattern_colors);
+            let superposition_img = image_from_lattice(&superposition);
+            self.frames.push(Frame::from_parts(
+                superposition_img,
+                0,
+                0,
+                Delay::from_numer_denom_ms(1, 1),
+            ));
+        }
+        self.num_updates += 1;
+    }
+}
+
+impl GifMaker {
+    pub fn new(path: PathBuf, pattern_colors: PatternMap<[u8; 4]>, skip_frames: usize) -> Self {
+        GifMaker {
+            path,
+            pattern_colors,
+            frames: Vec::new(),
+            num_updates: 0,
+            skip_frames,
+        }
+    }
+
+    pub fn save(self) -> Result<(), CliError> {
+        println!("Writing {:?}", self.path);
+        let file_out = File::create(&self.path)?;
+
+        gif::Encoder::new(file_out).encode_frames(self.frames.into_iter())?;
+
+        Ok(())
+    }
 }
