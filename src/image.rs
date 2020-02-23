@@ -11,6 +11,8 @@ use image::{self, gif, Delay, Frame, Rgba, RgbaImage};
 use std::fs::File;
 use std::path::PathBuf;
 
+// TODO: conversions should go in a new ilattice3 image feature
+
 pub fn lattice_from_image<I: LatticeIndexer>(indexer: I, img: &RgbaImage) -> Lattice<Rgba<u8>, I> {
     let size = [img.width() as i32, img.height() as i32, 1].into();
     let extent = lat::Extent::from_min_and_local_supremum([0, 0, 0].into(), size);

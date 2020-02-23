@@ -19,7 +19,7 @@ ctrlc = "*"
 dot_vox = { git = "https://github.com/bonsairobo/dot_vox" }
 flexi_logger = "*"
 hibitset = "*"
-ilattice3 = { git = "https://github.com/bonsairobo/ilattice3" }
+ilattice3 = { git = "https://github.com/bonsairobo/ilattice3", features = ["vox"] }
 image = "*"
 indicatif = "*"
 log = "*"
