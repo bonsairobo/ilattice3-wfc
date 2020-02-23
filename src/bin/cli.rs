@@ -20,11 +20,17 @@ struct Args {
     #[structopt(parse(from_os_str))]
     output_path: PathBuf,
 
-    /// Size of the patterns to extract from the input data.
+    /// If the input lattice contains tiles (repeated patterns larger than 1 voxel), set this size
+    /// to capture that structure. This is also much more efficient.
+    #[structopt(short, long)]
+    tile_size: Vec<i32>,
+
+    /// Size of the patterns (in tiles) to extract from the input data. E.g. if tile size is 2x2x2
+    /// and pattern size is 2x1x1 then the full size of a pattern in voxels is 4x2x2.
     #[structopt(short, long)]
     pattern_size: Vec<i32>,
 
-    /// Size of the generated output.
+    /// Size of the generated output in tiles.
     #[structopt(short, long)]
     output_size: Vec<i32>,
 
@@ -67,6 +73,7 @@ fn main(args: Args) -> Result<(), CliError> {
 
     let ProcessedInput {
         input_lattice,
+        tile_size,
         pattern_shape,
         seed,
         output_size,
@@ -76,15 +83,22 @@ fn main(args: Args) -> Result<(), CliError> {
         InputLattice::Vox(lattice, color_palette) => generate_vox(
             args,
             seed,
+            tile_size,
             pattern_shape,
             lattice,
             output_size,
             color_palette,
             running,
         )?,
-        InputLattice::Image(lattice) => {
-            generate_image(args, seed, pattern_shape, lattice, output_size, running)?
-        }
+        InputLattice::Image(lattice) => generate_image(
+            args,
+            seed,
+            tile_size,
+            pattern_shape,
+            lattice,
+            output_size,
+            running,
+        )?,
     }
 
     Ok(())
@@ -92,6 +106,7 @@ fn main(args: Args) -> Result<(), CliError> {
 
 struct ProcessedInput<I> {
     input_lattice: InputLattice<I>,
+    tile_size: lat::Point,
     pattern_shape: PatternShape,
     seed: [u8; NUM_SEED_BYTES],
     output_size: lat::Point,
@@ -111,12 +126,16 @@ struct VoxColorPalette {
 fn process_args(args: &Args) -> Result<ProcessedInput<PeriodicYLevelsIndexer>, CliError> {
     let indexer = PeriodicYLevelsIndexer {};
 
-    if args.pattern_size.len() != 3 {
-        panic!("Pattern size must specify 3 dimensions");
+    if !tile_size_is_valid(&args.tile_size) {
+        panic!("Voxel size must specify 3 positive dimensions");
     }
-    if args.output_size.len() != 3 {
-        panic!("Output size must specify 3 dimensions");
+    if !tile_size_is_valid(&args.pattern_size) {
+        panic!("Pattern size must specify 3 positive dimensions");
     }
+    if !tile_size_is_valid(&args.output_size) {
+        panic!("Output size must specify 3 positive dimensions");
+    }
+    let tile_size = lat::Point::from(get_three_elements(&args.tile_size));
     let pattern_size = lat::Point::from(get_three_elements(&args.pattern_size));
     let output_size = lat::Point::from(get_three_elements(&args.output_size));
 
@@ -133,7 +152,7 @@ fn process_args(args: &Args) -> Result<ProcessedInput<PeriodicYLevelsIndexer>, C
         .input_path
         .extension()
         .expect("Input file has no extention");
-    let (input_lattice, offset_group) = if extension == "vox" {
+    let (input_lattice, offsets) = if extension == "vox" {
         assert!(
             args.palette.is_none(),
             "Palette image only supported for 2D images"
@@ -149,7 +168,7 @@ fn process_args(args: &Args) -> Result<ProcessedInput<PeriodicYLevelsIndexer>, C
                     colors: input_vox.palette,
                 },
             ),
-            OffsetGroup::new(&face_3d_offsets()),
+            face_3d_offsets(),
         )
     } else {
         assert_eq!(
@@ -164,19 +183,30 @@ fn process_args(args: &Args) -> Result<ProcessedInput<PeriodicYLevelsIndexer>, C
 
         (
             InputLattice::Image(lattice_from_image(indexer, &input_img.to_rgba())),
-            OffsetGroup::new(&edge_2d_offsets()),
+            edge_2d_offsets(),
         )
     };
 
     Ok(ProcessedInput {
         input_lattice,
+        tile_size,
         pattern_shape: PatternShape {
             size: pattern_size,
-            offset_group,
+            offset_group: OffsetGroup::new(&offsets),
         },
         seed,
         output_size,
     })
+}
+
+fn tile_size_is_valid(size: &Vec<i32>) -> bool {
+    for c in size.iter() {
+        if *c <= 0 {
+            return false;
+        }
+    }
+
+    size.len() == 3
 }
 
 fn get_three_elements(v: &[i32]) -> [i32; 3] {
@@ -192,13 +222,19 @@ fn get_three_elements(v: &[i32]) -> [i32; 3] {
 fn generate_image(
     args: Args,
     seed: [u8; 16],
+    tile_size: lat::Point,
     pattern_shape: PatternShape,
     input_lattice: Lattice<u32, PeriodicYLevelsIndexer>,
     output_size: lat::Point,
     running: Arc<AtomicBool>,
 ) -> Result<(), CliError> {
+    println!(
+        "Input size in voxels = {}",
+        input_lattice.get_extent().get_local_supremum()
+    );
+
     let (pattern_group, representatives) =
-        process_patterns_in_lattice(&input_lattice, &pattern_shape);
+        process_patterns_in_lattice(&input_lattice, &tile_size, &pattern_shape);
     println!(
         "Found {} patterns in input lattice",
         pattern_group.num_patterns()
@@ -211,16 +247,16 @@ fn generate_image(
         palette_img.save(palette_path)?;
     }
 
-    let pattern_colors: PatternMap<[u8; 4]> =
-        find_pattern_colors_image(&input_lattice, &representatives);
+    let pattern_tiles = find_pattern_tiles_image(&input_lattice, &representatives, &tile_size);
 
     let skip_frames = args.skip_frames;
     let mut gif_maker = args
         .gif
-        .map(|gif_path| GifMaker::new(gif_path, pattern_colors.clone(), skip_frames));
+        .map(|gif_path| GifMaker::new(gif_path, pattern_tiles.clone(), tile_size, skip_frames));
 
     if let Some(result) = generate(seed, &pattern_group, output_size, &mut gif_maker, running) {
-        let colors = color_final_patterns_rgba(&result, &pattern_colors);
+        assert!(pattern_group.constraints.assignment_is_valid(&result));
+        let colors = color_final_patterns_rgba(&result, &pattern_tiles, &tile_size);
         let final_img = image_from_lattice(&colors);
         println!("Writing {:?}", args.output_path);
         final_img.save(args.output_path)?;
@@ -236,28 +272,34 @@ fn generate_image(
 fn generate_vox(
     args: Args,
     seed: [u8; 16],
+    tile_size: lat::Point,
     pattern_shape: PatternShape,
     input_lattice: Lattice<VoxColor, PeriodicYLevelsIndexer>,
     output_size: lat::Point,
     color_palette: VoxColorPalette,
     running: Arc<AtomicBool>,
 ) -> Result<(), std::io::Error> {
+    println!(
+        "Input size = {}",
+        input_lattice.get_extent().get_local_supremum()
+    );
+
     let (pattern_group, representatives) =
-        process_patterns_in_lattice(&input_lattice, &pattern_shape);
+        process_patterns_in_lattice(&input_lattice, &tile_size, &pattern_shape);
     println!(
         "Found {} patterns in input lattice",
         pattern_group.num_patterns()
     );
 
-    let pattern_colors: PatternMap<VoxColor> =
-        find_pattern_colors_vox(&input_lattice, &representatives);
+    let pattern_tiles = find_pattern_tiles_vox(&input_lattice, &representatives, &tile_size);
 
     if let Some(result) =
         generate::<NilFrameConsumer>(seed, &pattern_group, output_size, &mut None, running)
     {
-        let colors = color_final_patterns_vox(&result, &pattern_colors);
+        let colors = color_final_patterns_vox(&result, &pattern_tiles, &tile_size);
         let mut vox_data: DotVoxData = colors.into();
         vox_data.palette = color_palette.colors;
+        println!("Writing {:?}", args.output_path);
         let mut out_file = File::create(args.output_path)?;
         vox_data.write_vox(&mut out_file)?;
     }

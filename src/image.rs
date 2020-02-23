@@ -6,7 +6,7 @@ use crate::{
 };
 
 use ilattice3 as lat;
-use ilattice3::{Lattice, LatticeIndexer, VoxColor};
+use ilattice3::{Lattice, LatticeIndexer, VoxColor, YLevelsIndexer};
 use image::{self, gif, Delay, Frame, Rgba, RgbaImage};
 use std::fs::File;
 use std::path::PathBuf;
@@ -53,7 +53,7 @@ pub fn rgba_from_integer(i: u32) -> [u8; 4] {
 pub fn make_palette_lattice<I: LatticeIndexer + Copy>(
     source_lattice: &Lattice<u32, I>,
     representatives: &PatternRepresentatives,
-) -> Lattice<u32, I> {
+) -> Lattice<u32, I> { // TODO: don't need to use I
     let pattern_size = *representatives.get(PatternId(0)).get_local_supremum();
     let mut palette_size = pattern_size;
     palette_size.x = (pattern_size.x + 1) * representatives.num_elements() as i32;
@@ -69,69 +69,89 @@ pub fn make_palette_lattice<I: LatticeIndexer + Copy>(
 }
 
 pub fn color_superposition(
-    lattice: &Lattice<PatternSet>,
-    colors: &PatternMap<[u8; 4]>,
+    pattern_lattice: &Lattice<PatternSet>,
+    tiles: &PatternMap<Vec<[u8; 4]>>,
+    tile_size: &lat::Point,
 ) -> Lattice<u32> {
-    let mut color_lattice = Lattice::fill(lattice.get_extent(), 0);
-    for p in &color_lattice.get_extent() {
-        let mut color_sum = [0.0; 4];
-        let mut num_patterns = 0;
-        for pattern_id in lattice.get_local(&p).iter() {
-            let pattern_color = colors.get(pattern_id);
-            for i in 0..4 {
-                color_sum[i] += pattern_color[i] as f32;
+    let full_size = *pattern_lattice.get_extent().get_local_supremum() * *tile_size;
+    let full_extent = lat::Extent::from_min_and_local_supremum([0, 0, 0].into(), full_size);
+
+    let mut color_lattice = Lattice::fill(full_extent, 0);
+    for pattern_p in &pattern_lattice.get_extent() {
+        let output_extent =
+            lat::Extent::from_min_and_local_supremum(pattern_p * *tile_size, *tile_size);
+        for p in output_extent {
+            let mut num_patterns = 0;
+            let patterns = pattern_lattice.get_world(&pattern_p);
+            let mut color_sum = [0.0; 4];
+            for pattern in patterns.iter() {
+                num_patterns += 1;
+                let tile = tiles.get(pattern);
+                let tile = Lattice::<_, YLevelsIndexer>::deserialize(&output_extent, &tile);
+                let p_color = *tile.get_world(&p);
+                for i in 0..4 {
+                    color_sum[i] += p_color[i] as f32;
+                }
             }
-            num_patterns += 1;
+            let mut mean_color = [0; 4];
+            for i in 0..4 {
+                mean_color[i] = (color_sum[i] / num_patterns as f32).floor() as u8;
+            }
+            *color_lattice.get_mut_local(&p) = integer_from_rgba(Rgba(mean_color));
         }
-        let mut mean_color = [0; 4];
-        for i in 0..4 {
-            mean_color[i] = (color_sum[i] / num_patterns as f32).floor() as u8;
-        }
-        *color_lattice.get_mut_local(&p) = integer_from_rgba(Rgba(mean_color));
     }
 
     color_lattice
 }
 
 fn color_final_patterns<C, T, F>(
-    lattice: &Lattice<PatternId>,
-    colors: &PatternMap<C>,
+    pattern_lattice: &Lattice<PatternId>,
+    tiles: &PatternMap<Vec<C>>,
+    tile_size: &lat::Point,
     converter: F,
 ) -> Lattice<T>
 where
     C: Copy,
-    F: Fn(C) -> T,
+    F: Fn(&C) -> T + Copy,
     T: Clone + Default,
 {
-    let mut color_lattice = Lattice::fill(lattice.get_extent(), T::default());
-    for p in &color_lattice.get_extent() {
-        let pattern = lattice.get_world(&p);
-        let color = colors.get(*pattern);
-        *color_lattice.get_mut_local(&p) = converter(*color);
+    let full_size = *pattern_lattice.get_extent().get_local_supremum() * *tile_size;
+    let full_extent = lat::Extent::from_min_and_local_supremum([0, 0, 0].into(), full_size);
+
+    let mut color_lattice = Lattice::fill(full_extent, T::default());
+    for p in &pattern_lattice.get_extent() {
+        let output_extent = lat::Extent::from_min_and_local_supremum(p * *tile_size, *tile_size);
+        let pattern = pattern_lattice.get_world(&p);
+        let tile = tiles.get(*pattern);
+        let tile = Lattice::<_, YLevelsIndexer>::deserialize(&output_extent, &tile);
+        Lattice::map_extent(&tile, &mut color_lattice, &output_extent, converter);
     }
 
     color_lattice
 }
 
 pub fn color_final_patterns_rgba(
-    lattice: &Lattice<PatternId>,
-    colors: &PatternMap<[u8; 4]>,
+    pattern_lattice: &Lattice<PatternId>,
+    tiles: &PatternMap<Vec<[u8; 4]>>,
+    tile_size: &lat::Point,
 ) -> Lattice<u32> {
-    let rgba_converter = |c| integer_from_rgba(Rgba(c));
+    let rgba_converter = |c: &[u8; 4]| integer_from_rgba(Rgba(*c));
 
-    color_final_patterns(lattice, colors, rgba_converter)
+    color_final_patterns(pattern_lattice, tiles, tile_size, rgba_converter)
 }
 
 pub fn color_final_patterns_vox(
-    lattice: &Lattice<PatternId>,
-    colors: &PatternMap<VoxColor>,
+    pattern_lattice: &Lattice<PatternId>,
+    tiles: &PatternMap<Vec<VoxColor>>,
+    tile_size: &lat::Point,
 ) -> Lattice<VoxColor> {
-    color_final_patterns(lattice, colors, |c| c)
+    color_final_patterns(pattern_lattice, tiles, tile_size, |c| *c)
 }
 
 pub struct GifMaker {
     path: PathBuf,
-    pattern_colors: PatternMap<[u8; 4]>,
+    pattern_colors: PatternMap<Vec<[u8; 4]>>,
+    tile_size: lat::Point,
     frames: Vec<Frame>,
     num_updates: usize,
     skip_frames: usize,
@@ -140,7 +160,7 @@ pub struct GifMaker {
 impl FrameConsumer for GifMaker {
     fn use_frame(&mut self, slots: &Lattice<PatternSet>) {
         if self.num_updates % self.skip_frames == 0 {
-            let superposition = color_superposition(slots, &self.pattern_colors);
+            let superposition = color_superposition(slots, &self.pattern_colors, &self.tile_size);
             let superposition_img = image_from_lattice(&superposition);
             self.frames.push(Frame::from_parts(
                 superposition_img,
@@ -154,10 +174,16 @@ impl FrameConsumer for GifMaker {
 }
 
 impl GifMaker {
-    pub fn new(path: PathBuf, pattern_colors: PatternMap<[u8; 4]>, skip_frames: usize) -> Self {
+    pub fn new(
+        path: PathBuf,
+        pattern_colors: PatternMap<Vec<[u8; 4]>>,
+        tile_size: lat::Point,
+        skip_frames: usize,
+    ) -> Self {
         GifMaker {
             path,
             pattern_colors,
+            tile_size,
             frames: Vec::new(),
             num_updates: 0,
             skip_frames,

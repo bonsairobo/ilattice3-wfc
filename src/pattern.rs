@@ -21,7 +21,7 @@ pub struct PatternGroup {
     /// Count of each pattern in the source lattice. Equivalently, a prior distribution of patterns.
     weights: PatternMap<u32>,
     /// One set of constraints for each pattern.
-    constraints: SymmetricPatternConstraints,
+    pub constraints: SymmetricPatternConstraints,
 }
 
 /// Represents one of the possible patterns.
@@ -121,18 +121,22 @@ impl PatternGroup {
 /// possible offset.
 pub fn process_patterns_in_lattice<T>(
     lattice: &Lattice<T, PeriodicYLevelsIndexer>,
+    tile_size: &lat::Point,
     pattern_shape: &PatternShape,
 ) -> (PatternGroup, PatternRepresentatives)
 where
     T: Clone + Copy + Default + Eq + Hash,
 {
     let full_extent = lattice.get_extent();
+    let tiled_size = full_extent.get_local_supremum().div_ceil(tile_size);
+    let tiled_extent = lat::Extent::from_min_and_local_supremum([0, 0, 0].into(), tiled_size);
+    let pattern_size = pattern_shape.size * *tile_size;
 
     // Map sublattice data to pattern ID.
     let mut patterns: HashMap<Vec<T>, PatternId> = HashMap::new();
     // Map pattern center to pattern ID.
     let mut pattern_lattice =
-        Lattice::fill_with_indexer(lattice.indexer, full_extent, EMPTY_PATTERN_ID);
+        Lattice::fill_with_indexer(lattice.indexer, tiled_extent, EMPTY_PATTERN_ID);
     // Map from pattern ID to sublattice.
     let mut pattern_representatives = Vec::new();
     // Map from pattern ID to # of occurrences.
@@ -140,10 +144,10 @@ where
 
     // Index the patterns.
     let mut next_pattern_id = 0;
-    for pattern_point in full_extent.into_iter() {
+    for pattern_point in tiled_extent.into_iter() {
         // Identify the pattern with the serialized values.
         let pattern_extent =
-            lat::Extent::from_min_and_local_supremum(pattern_point, pattern_shape.size);
+            lat::Extent::from_min_and_local_supremum(pattern_point * *tile_size, pattern_size);
         let pattern_values = lattice.serialize_extent(&pattern_extent);
         let pattern_id = patterns.entry(pattern_values).or_insert_with(|| {
             let this_pattern_id = PatternId(next_pattern_id);
@@ -168,12 +172,11 @@ where
     }
     let mut pattern_constraints =
         SymmetricPatternConstraints::new(pattern_shape.offset_group.clone(), num_patterns as u16);
-    for pattern_point in full_extent.into_iter() {
+    for pattern_point in tiled_extent.into_iter() {
         let pattern = *pattern_lattice.get_local(&pattern_point);
         debug_assert!(pattern != EMPTY_PATTERN_ID);
         for (_, offset) in pattern_shape.offset_group.iter() {
-            let offset = *offset;
-            let offset_point = pattern_point + offset;
+            let offset_point = pattern_point + *offset;
             let offset_pattern = *pattern_lattice.get_local(&offset_point);
             debug_assert!(offset_pattern != EMPTY_PATTERN_ID);
 
@@ -292,6 +295,28 @@ impl SymmetricPatternConstraints {
 
         pattern_supports
     }
+
+    pub fn assignment_is_valid<I: LatticeIndexer>(
+        &self,
+        assignment: &Lattice<PatternId, I>,
+    ) -> bool {
+        let extent = assignment.get_extent();
+        for p in extent {
+            let pattern = assignment.get_world(&p);
+            for (offset_id, offset) in self.offset_group.iter() {
+                let offset_p = p + *offset;
+                if !extent.contains_world(&offset_p) {
+                    continue;
+                }
+                let offset_pattern = assignment.get_world(&offset_p);
+                if !self.are_compatible(*pattern, *offset_pattern, offset_id) {
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
 }
 
 /// A dynamic structure that tracks, for a pattern P (in some slot), how many patterns are
@@ -318,18 +343,41 @@ impl PatternSupport {
     }
 }
 
-pub fn find_pattern_colors_image<I: LatticeIndexer>(
+pub fn find_pattern_tiles_image<I: LatticeIndexer + Copy>(
     lattice: &Lattice<u32, I>,
     representatives: &PatternRepresentatives,
-) -> PatternMap<[u8; 4]> {
-    representatives.map(|e| unsafe { std::mem::transmute(*lattice.get_local(&e.get_minimum())) })
+    tile_size: &lat::Point,
+) -> PatternMap<Vec<[u8; 4]>> {
+    let mut tiles = Vec::new();
+    for (_, extent) in representatives.iter() {
+        // Representatives track the entire pattern, but we only need the tile where the pattern is.
+        let tile_extent =
+            lat::Extent::from_min_and_local_supremum(extent.get_minimum(), *tile_size);
+        let tile = lattice
+            .serialize_extent(&tile_extent)
+            .into_iter()
+            .map(|c| unsafe { std::mem::transmute(c) })
+            .collect();
+        tiles.push(tile);
+    }
+
+    PatternMap::new(tiles)
 }
 
-pub fn find_pattern_colors_vox<I: LatticeIndexer>(
+pub fn find_pattern_tiles_vox<I: LatticeIndexer>(
     lattice: &Lattice<VoxColor, I>,
     representatives: &PatternRepresentatives,
-) -> PatternMap<VoxColor> {
-    representatives.map(|e| *lattice.get_local(&e.get_minimum()))
+    tile_size: &lat::Point,
+) -> PatternMap<Vec<VoxColor>> {
+    let mut tiles = Vec::new();
+    for (_, extent) in representatives.iter() {
+        // Representatives track the entire pattern, but we only need the tile where the pattern is.
+        let tile_extent =
+            lat::Extent::from_min_and_local_supremum(extent.get_minimum(), *tile_size);
+        tiles.push(lattice.serialize_extent(&tile_extent));
+    }
+
+    PatternMap::new(tiles)
 }
 
 pub type PatternMap<T> = StaticVec<PatternId, T>;
