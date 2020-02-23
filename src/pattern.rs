@@ -5,7 +5,7 @@ use crate::{
 
 use hibitset::{BitSet, BitSetLike};
 use ilattice3 as lat;
-use ilattice3::{Lattice, LatticeIndexer, PeriodicYLevelsIndexer, VoxColor};
+use ilattice3::{Lattice, LatticeIndexer, PeriodicYLevelsIndexer, YLevelsIndexer};
 use rand::prelude::*;
 use rand_distr::weighted::WeightedIndex;
 use std::collections::HashMap;
@@ -125,7 +125,7 @@ pub fn process_patterns_in_lattice<T>(
     pattern_shape: &PatternShape,
 ) -> (PatternGroup, PatternRepresentatives)
 where
-    T: Clone + Copy + Default + Eq + Hash,
+    T: Clone + Copy + Eq + Hash,
 {
     let full_extent = lattice.get_extent();
     let tiled_size = full_extent.get_local_supremum().div_ceil(tile_size);
@@ -343,39 +343,51 @@ impl PatternSupport {
     }
 }
 
-pub fn find_pattern_tiles_image<I: LatticeIndexer + Copy>(
-    lattice: &Lattice<u32, I>,
-    representatives: &PatternRepresentatives,
-    tile_size: &lat::Point,
-) -> PatternMap<Vec<[u8; 4]>> {
-    let mut tiles = Vec::new();
-    for (_, extent) in representatives.iter() {
-        // Representatives track the entire pattern, but we only need the tile where the pattern is.
-        let tile_extent =
-            lat::Extent::from_min_and_local_supremum(extent.get_minimum(), *tile_size);
-        let tile = lattice
-            .serialize_extent(&tile_extent)
-            .into_iter()
-            .map(|c| unsafe { std::mem::transmute(c) })
-            .collect();
-        tiles.push(tile);
-    }
-
-    PatternMap::new(tiles)
+/// One unit of the input/output lattice. May contain many voxels.
+#[derive(Clone, Eq, PartialEq)]
+pub struct Tile<C> {
+    colors: Vec<C>,
 }
 
-pub fn find_pattern_tiles_vox<I: LatticeIndexer>(
-    lattice: &Lattice<VoxColor, I>,
+impl<C: Clone> Tile<C> {
+    pub fn new(colors: Vec<C>) -> Self {
+        Tile { colors }
+    }
+
+    pub fn get_colors(&self) -> &[C] {
+        &self.colors
+    }
+
+    pub fn get_from_lattice<I: LatticeIndexer, G: Clone + Into<C>>(
+        lattice: &Lattice<G, I>, extent: &lat::Extent
+    ) -> Tile<C> {
+        Tile::new(
+            lattice
+                .serialize_extent(extent)
+                .into_iter()
+                .map(|g| g.into())
+                .collect::<Vec<C>>()
+        )
+    }
+
+    /// Puts the tile in a specific location.
+    pub fn put_in_extent(&self, extent: &lat::Extent) -> Lattice<C> {
+        Lattice::<_, YLevelsIndexer>::deserialize(extent, &self.colors)
+    }
+}
+
+pub fn find_pattern_tiles_in_lattice<I: LatticeIndexer, C: Clone, G: Clone + Into<C>>(
+    lattice: &Lattice<G, I>,
     representatives: &PatternRepresentatives,
     tile_size: &lat::Point,
-) -> PatternMap<Vec<VoxColor>> {
-    let mut tiles = Vec::new();
-    for (_, extent) in representatives.iter() {
+) -> PatternMap<Tile<C>> {
+    let tiles = representatives.iter().map(|(_, extent)| {
         // Representatives track the entire pattern, but we only need the tile where the pattern is.
         let tile_extent =
             lat::Extent::from_min_and_local_supremum(extent.get_minimum(), *tile_size);
-        tiles.push(lattice.serialize_extent(&tile_extent));
-    }
+
+            Tile::get_from_lattice(lattice, &tile_extent)
+    }).collect();
 
     PatternMap::new(tiles)
 }

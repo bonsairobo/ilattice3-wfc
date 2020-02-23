@@ -4,6 +4,7 @@ use dot_vox::DotVoxData;
 use flexi_logger::{default_format, Logger};
 use ilattice3 as lat;
 use ilattice3::{Lattice, PeriodicYLevelsIndexer, VoxColor};
+use image::Rgba;
 use indicatif::ProgressBar;
 use std::fs::File;
 use std::path::PathBuf;
@@ -116,7 +117,7 @@ enum InputLattice<I> {
     // Vox lattice stores indices into a color palette.
     Vox(Lattice<VoxColor, I>, VoxColorPalette),
     // Images just store the colors directly.
-    Image(Lattice<u32, I>),
+    Image(Lattice<Rgba<u8>, I>),
 }
 
 struct VoxColorPalette {
@@ -199,7 +200,7 @@ fn process_args(args: &Args) -> Result<ProcessedInput<PeriodicYLevelsIndexer>, C
     })
 }
 
-fn tile_size_is_valid(size: &Vec<i32>) -> bool {
+fn tile_size_is_valid(size: &[i32]) -> bool {
     for c in size.iter() {
         if *c <= 0 {
             return false;
@@ -224,7 +225,7 @@ fn generate_image(
     seed: [u8; 16],
     tile_size: lat::Point,
     pattern_shape: PatternShape,
-    input_lattice: Lattice<u32, PeriodicYLevelsIndexer>,
+    input_lattice: Lattice<Rgba<u8>, PeriodicYLevelsIndexer>,
     output_size: lat::Point,
     running: Arc<AtomicBool>,
 ) -> Result<(), CliError> {
@@ -247,7 +248,7 @@ fn generate_image(
         palette_img.save(palette_path)?;
     }
 
-    let pattern_tiles = find_pattern_tiles_image(&input_lattice, &representatives, &tile_size);
+    let pattern_tiles = find_pattern_tiles_in_lattice(&input_lattice, &representatives, &tile_size);
 
     let skip_frames = args.skip_frames;
     let mut gif_maker = args
@@ -294,7 +295,7 @@ fn generate_vox(
         pattern_group.num_patterns()
     );
 
-    let pattern_tiles = find_pattern_tiles_vox(&input_lattice, &representatives, &tile_size);
+    let pattern_tiles = find_pattern_tiles_in_lattice(&input_lattice, &representatives, &tile_size);
 
     if let Some(result) =
         generate::<NilFrameConsumer>(seed, &pattern_group, output_size, &mut None, running)
