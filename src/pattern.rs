@@ -50,12 +50,6 @@ impl PatternSampler {
     }
 }
 
-/// Metadata about configurations of voxels, called "patterns," and how they are related.
-pub struct PatternGroup {
-    /// One set of constraints for each pattern.
-    pub constraints: SymmetricPatternConstraints,
-}
-
 /// Represents one of the possible patterns.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PatternId(pub u16);
@@ -78,44 +72,6 @@ impl Id for PatternId {}
 
 const EMPTY_PATTERN_ID: PatternId = PatternId(std::u16::MAX);
 
-impl PatternGroup {
-    pub fn new(constraints: SymmetricPatternConstraints) -> Self {
-        constraints.assert_valid();
-
-        PatternGroup { constraints }
-    }
-
-    pub fn num_patterns(&self) -> u16 {
-        self.constraints.num_patterns()
-    }
-
-    pub fn get_offset_group(&self) -> &OffsetGroup {
-        &self.constraints.offset_group
-    }
-
-    pub fn get_initial_support(&self) -> PatternMap<PatternSupport> {
-        self.constraints.get_initial_support()
-    }
-
-    pub fn iter_compatible(
-        &self,
-        pattern: PatternId,
-        offset: OffsetId,
-    ) -> impl Iterator<Item = PatternId> + '_ {
-        self.constraints.iter_compatible(pattern, offset)
-    }
-
-    pub fn are_compatible(
-        &self,
-        pattern: PatternId,
-        offset_pattern: PatternId,
-        offset: OffsetId,
-    ) -> bool {
-        self.constraints
-            .are_compatible(pattern, offset_pattern, offset)
-    }
-}
-
 // TODO: support non-periodic indexer
 /// For each unique (up to translation) sublattice of `lattice`, create a `PatternId`, count the
 /// occurences of the pattern, and record the set of patterns that overlap with that pattern at each
@@ -124,7 +80,7 @@ pub fn process_patterns_in_lattice<T>(
     lattice: &Lattice<T, PeriodicYLevelsIndexer>,
     tile_size: &lat::Point,
     pattern_shape: &PatternShape,
-) -> (PatternSampler, PatternGroup, PatternRepresentatives)
+) -> (PatternSampler, PatternConstraints, PatternRepresentatives)
 where
     T: Clone + Copy + Eq + Hash,
 {
@@ -172,7 +128,7 @@ where
         );
     }
     let mut pattern_constraints =
-        SymmetricPatternConstraints::new(pattern_shape.offset_group.clone(), num_patterns as u16);
+        PatternConstraints::new(pattern_shape.offset_group.clone(), num_patterns as u16);
     for pattern_point in tiled_extent.into_iter() {
         let pattern = *pattern_lattice.get_local(&pattern_point);
         debug_assert!(pattern != EMPTY_PATTERN_ID);
@@ -186,13 +142,15 @@ where
         *pattern_weights.get_mut(pattern) += 1;
     }
 
+    pattern_constraints.assert_valid();
+
     let mut sorted_weights = pattern_weights.get_raw().clone();
     sorted_weights.sort();
     println!("Weights = {:?}", sorted_weights);
 
     (
         PatternSampler::new(pattern_weights),
-        PatternGroup::new(pattern_constraints),
+        pattern_constraints,
         PatternRepresentatives::new(pattern_representatives),
     )
 }
@@ -200,13 +158,13 @@ where
 pub type PatternRepresentatives = PatternMap<lat::Extent>;
 
 /// Used to build the set of pattern relations. Enforces symmetry of the `compatible` relation.
-pub struct SymmetricPatternConstraints {
+pub struct PatternConstraints {
     constraints: PatternMap<OffsetMap<BitSet>>,
     offset_group: OffsetGroup,
     num_patterns: u16,
 }
 
-impl SymmetricPatternConstraints {
+impl PatternConstraints {
     pub fn new(offset_group: OffsetGroup, num_patterns: u16) -> Self {
         Self {
             constraints: PatternMap::fill(
@@ -216,6 +174,10 @@ impl SymmetricPatternConstraints {
             offset_group,
             num_patterns,
         }
+    }
+
+    pub fn get_offset_group(&self) -> &OffsetGroup {
+        &self.offset_group
     }
 
     fn assert_valid(&self) {
@@ -359,14 +321,15 @@ impl<C: Clone> Tile<C> {
     }
 
     pub fn get_from_lattice<I: LatticeIndexer, G: Clone + Into<C>>(
-        lattice: &Lattice<G, I>, extent: &lat::Extent
+        lattice: &Lattice<G, I>,
+        extent: &lat::Extent,
     ) -> Tile<C> {
         Tile::new(
             lattice
                 .serialize_extent(extent)
                 .into_iter()
                 .map(|g| g.into())
-                .collect::<Vec<C>>()
+                .collect::<Vec<C>>(),
         )
     }
 
@@ -381,13 +344,16 @@ pub fn find_pattern_tiles_in_lattice<I: LatticeIndexer, C: Clone, G: Clone + Int
     representatives: &PatternRepresentatives,
     tile_size: &lat::Point,
 ) -> PatternMap<Tile<C>> {
-    let tiles = representatives.iter().map(|(_, extent)| {
-        // Representatives track the entire pattern, but we only need the tile where the pattern is.
-        let tile_extent =
-            lat::Extent::from_min_and_local_supremum(extent.get_minimum(), *tile_size);
+    let tiles = representatives
+        .iter()
+        .map(|(_, extent)| {
+            // Representatives track the entire pattern, but we only need the tile where the pattern is.
+            let tile_extent =
+                lat::Extent::from_min_and_local_supremum(extent.get_minimum(), *tile_size);
 
             Tile::get_from_lattice(lattice, &tile_extent)
-    }).collect();
+        })
+        .collect();
 
     PatternMap::new(tiles)
 }

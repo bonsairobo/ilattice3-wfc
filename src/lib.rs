@@ -16,8 +16,8 @@ pub use crate::image::{
 pub use generate::{Generator, UpdateResult, NUM_SEED_BYTES};
 pub use offset::{edge_2d_offsets, face_3d_offsets, OffsetGroup};
 pub use pattern::{
-    find_pattern_tiles_in_lattice, process_patterns_in_lattice, PatternGroup,
-    PatternId, PatternMap, PatternSampler, PatternSet, PatternShape, SymmetricPatternConstraints,
+    find_pattern_tiles_in_lattice, process_patterns_in_lattice, PatternConstraints, PatternId,
+    PatternMap, PatternSampler, PatternSet, PatternShape,
 };
 
 use ::image::ImageError;

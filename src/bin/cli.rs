@@ -234,11 +234,11 @@ fn generate_image(
         input_lattice.get_extent().get_local_supremum()
     );
 
-    let (pattern_sampler, pattern_group, representatives) =
+    let (pattern_sampler, pattern_constraints, representatives) =
         process_patterns_in_lattice(&input_lattice, &tile_size, &pattern_shape);
     println!(
         "Found {} patterns in input lattice",
-        pattern_group.num_patterns()
+        pattern_constraints.num_patterns()
     );
 
     if let Some(palette_path) = args.palette {
@@ -256,10 +256,15 @@ fn generate_image(
         .map(|gif_path| GifMaker::new(gif_path, pattern_tiles.clone(), tile_size, skip_frames));
 
     if let Some(result) = generate(
-        seed, &pattern_sampler, &pattern_group, output_size, &mut gif_maker, running
+        seed,
+        &pattern_sampler,
+        &pattern_constraints,
+        output_size,
+        &mut gif_maker,
+        running,
     ) {
         assert!(
-            pattern_group.constraints.assignment_is_valid(&result),
+            pattern_constraints.assignment_is_valid(&result),
             "BUG: produced output that doesn't satisfy constraints"
         );
         let colors = color_final_patterns_rgba(&result, &pattern_tiles, &tile_size);
@@ -290,17 +295,22 @@ fn generate_vox(
         input_lattice.get_extent().get_local_supremum()
     );
 
-    let (pattern_sampler, pattern_group, representatives) =
+    let (pattern_sampler, pattern_constraints, representatives) =
         process_patterns_in_lattice(&input_lattice, &tile_size, &pattern_shape);
     println!(
         "Found {} patterns in input lattice",
-        pattern_group.num_patterns()
+        pattern_constraints.num_patterns()
     );
 
     let pattern_tiles = find_pattern_tiles_in_lattice(&input_lattice, &representatives, &tile_size);
 
     if let Some(result) = generate::<NilFrameConsumer>(
-        seed, &pattern_sampler, &pattern_group, output_size, &mut None, running
+        seed,
+        &pattern_sampler,
+        &pattern_constraints,
+        output_size,
+        &mut None,
+        running,
     ) {
         let colors = color_final_patterns_vox(&result, &pattern_tiles, &tile_size);
         let mut vox_data: DotVoxData = colors.into();
@@ -316,7 +326,7 @@ fn generate_vox(
 fn generate<F>(
     seed: [u8; 16],
     pattern_sampler: &PatternSampler,
-    pattern_group: &PatternGroup,
+    pattern_constraints: &PatternConstraints,
     output_size: lat::Point,
     frame_consumer: &mut Option<F>,
     running: Arc<AtomicBool>,
@@ -329,11 +339,11 @@ where
     let volume = lat::Extent::from_min_and_local_supremum([0, 0, 0].into(), output_size).volume();
     let progress_bar = ProgressBar::new(volume as u64);
 
-    let mut generator = Generator::new(seed, output_size, pattern_sampler, pattern_group);
+    let mut generator = Generator::new(seed, output_size, pattern_sampler, pattern_constraints);
     let mut success = true;
     println!("Generating...");
     loop {
-        let state = generator.update(pattern_sampler, pattern_group);
+        let state = generator.update(pattern_sampler, pattern_constraints);
         progress_bar.set_position(generator.num_collapsed() as u64);
         match state {
             UpdateResult::Success => break,
