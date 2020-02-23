@@ -10,8 +10,8 @@ mod static_vec;
 mod wave;
 
 pub use crate::image::{
-    color_final_patterns_rgba, color_final_patterns_vox, color_superposition, image_from_lattice,
-    lattice_from_image, make_palette_lattice, GifMaker,
+    color_final_patterns_rgba, color_final_patterns_vox, color_superposition, make_palette_lattice,
+    GifMaker,
 };
 pub use generate::{Generator, UpdateResult, NUM_SEED_BYTES};
 pub use offset::{edge_2d_offsets, face_3d_offsets, OffsetGroup};

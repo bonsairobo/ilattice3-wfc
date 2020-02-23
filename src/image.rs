@@ -11,36 +11,6 @@ use image::{self, gif, Delay, Frame, Rgba, RgbaImage};
 use std::fs::File;
 use std::path::PathBuf;
 
-// TODO: conversions should go in a new ilattice3 image feature
-
-pub fn lattice_from_image<I: LatticeIndexer>(indexer: I, img: &RgbaImage) -> Lattice<Rgba<u8>, I> {
-    let size = [img.width() as i32, img.height() as i32, 1].into();
-    let extent = lat::Extent::from_min_and_local_supremum([0, 0, 0].into(), size);
-    let mut lattice = Lattice::fill_with_indexer(indexer, extent, Rgba([0; 4]));
-    for (x, y, pixel) in img.enumerate_pixels() {
-        let point = [x as i32, y as i32, 0].into();
-        *lattice.get_mut_local(&point) = *pixel;
-    }
-
-    lattice
-}
-
-pub fn image_from_lattice<I: LatticeIndexer>(lattice: &Lattice<Rgba<u8>, I>) -> RgbaImage {
-    let extent = lattice.get_extent();
-    let size = extent.get_local_supremum();
-    debug_assert_eq!(size.z, 1);
-    debug_assert!(size.x > 0);
-    debug_assert!(size.y > 0);
-    let (width, height) = (size.x as u32, size.y as u32);
-
-    let mut img = RgbaImage::new(width, height);
-    for p in extent {
-        *img.get_pixel_mut(p.x as u32, p.y as u32) = *lattice.get_local(&p);
-    }
-
-    img
-}
-
 pub fn make_palette_lattice<I: LatticeIndexer + Copy>(
     source_lattice: &Lattice<Rgba<u8>, I>,
     representatives: &PatternRepresentatives,
@@ -146,7 +116,7 @@ impl FrameConsumer for GifMaker {
     fn use_frame(&mut self, slots: &Lattice<PatternSet>) {
         if self.num_updates % self.skip_frames == 0 {
             let superposition = color_superposition(slots, &self.pattern_tiles, &self.tile_size);
-            let superposition_img = image_from_lattice(&superposition);
+            let superposition_img: RgbaImage = (&superposition).into();
             self.frames.push(Frame::from_parts(
                 superposition_img,
                 0,

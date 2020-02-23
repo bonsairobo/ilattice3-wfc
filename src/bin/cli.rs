@@ -4,7 +4,7 @@ use dot_vox::DotVoxData;
 use flexi_logger::{default_format, Logger};
 use ilattice3 as lat;
 use ilattice3::{Lattice, PeriodicYLevelsIndexer, VoxColor};
-use image::Rgba;
+use image::{Rgba, RgbaImage};
 use indicatif::ProgressBar;
 use std::fs::File;
 use std::path::PathBuf;
@@ -183,7 +183,7 @@ fn process_args(args: &Args) -> Result<ProcessedInput<PeriodicYLevelsIndexer>, C
         let input_img = image::open(args.input_path.as_os_str())?;
 
         (
-            InputLattice::Image(lattice_from_image(indexer, &input_img.to_rgba())),
+            InputLattice::Image((&input_img.to_rgba(), indexer).into()),
             edge_2d_offsets(),
         )
     };
@@ -244,7 +244,7 @@ fn generate_image(
     if let Some(palette_path) = args.palette {
         // Save the palette image for debugging.
         let palette_lattice = make_palette_lattice(&input_lattice, &representatives);
-        let palette_img = image_from_lattice(&palette_lattice);
+        let palette_img: RgbaImage = (&palette_lattice).into();
         palette_img.save(palette_path)?;
     }
 
@@ -268,7 +268,7 @@ fn generate_image(
             "BUG: produced output that doesn't satisfy constraints"
         );
         let colors = color_final_patterns_rgba(&result, &pattern_tiles, &tile_size);
-        let final_img = image_from_lattice(&colors);
+        let final_img: RgbaImage = (&colors).into();
         println!("Writing {:?}", args.output_path);
         final_img.save(args.output_path)?;
 
