@@ -255,7 +255,10 @@ fn generate_image(
         .map(|gif_path| GifMaker::new(gif_path, pattern_tiles.clone(), tile_size, skip_frames));
 
     if let Some(result) = generate(seed, &pattern_group, output_size, &mut gif_maker, running) {
-        assert!(pattern_group.constraints.assignment_is_valid(&result));
+        assert!(
+            pattern_group.constraints.assignment_is_valid(&result),
+            "BUG: produced output that doesn't satisfy constraints"
+        );
         let colors = color_final_patterns_rgba(&result, &pattern_tiles, &tile_size);
         let final_img = image_from_lattice(&colors);
         println!("Writing {:?}", args.output_path);

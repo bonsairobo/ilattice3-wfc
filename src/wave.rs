@@ -173,7 +173,7 @@ impl Wave {
             }
 
             panic!(
-                "Pattern {:?} is possible at slot {}",
+                "BUG: Pattern {:?} is possible at slot {}, but it was removed",
                 pattern, impossible_slot
             );
         }
