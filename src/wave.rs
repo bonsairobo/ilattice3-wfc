@@ -5,7 +5,7 @@ use crate::{
 
 use ilattice3 as lat;
 use ilattice3::Lattice;
-use log::{debug, trace, warn};
+use log::{debug, info, warn};
 use rand::prelude::*;
 
 /// The colloquial "wave function" to be collapsed. Stores the possible remaining patterns that
@@ -107,11 +107,6 @@ impl Wave {
             // patterns can use it as support.
             let (visit_slot, impossible_at_visit_slot) = self.removal_stack.pop().unwrap();
             let visit_slot = self.slots.local_point_from_index(visit_slot.0);
-            trace!(
-                "Visiting {} that removed {:?}",
-                visit_slot,
-                impossible_at_visit_slot
-            );
 
             for (offset_id, offset) in pattern_group.get_offset_group().iter() {
                 // Make sure we don't index out of bounds.
@@ -126,14 +121,8 @@ impl Wave {
                 for offset_pattern in
                     pattern_group.iter_compatible(impossible_at_visit_slot, offset_id)
                 {
-                    trace!(
-                        "Removing support for {:?} @ {}",
-                        offset_pattern,
-                        offset_slot
-                    );
                     let no_support = self.remove_support(&offset_slot, offset_pattern, offset_id);
                     if no_support {
-                        trace!("No support remaining");
                         let slot_empty =
                             self.remove_pattern(pattern_group, &offset_slot, offset_pattern);
                         if slot_empty {
@@ -149,9 +138,8 @@ impl Wave {
         true
     }
 
-    /// Verify that this slot is actually impossible based on the constraints alone. To appease my
-    /// paranoia.
-    fn assert_slot_has_contradiction(
+    /// Even though this slot has no patterns, it may be recoverable (if it was collapsed).
+    fn check_slot_for_possible_patterns(
         &self,
         pattern_group: &PatternGroup,
         impossible_slot: &lat::Point,
@@ -172,8 +160,9 @@ impl Wave {
                 continue 'check_pattern;
             }
 
-            panic!(
-                "BUG: Pattern {:?} is possible at slot {}, but it was removed",
+            info!(
+                "Pattern {:?} is possible at slot {}, \
+                but it was removed (likely during collapse)",
                 pattern, impossible_slot
             );
         }
@@ -186,14 +175,12 @@ impl Wave {
         slot: &lat::Point,
         pattern: PatternId,
     ) -> bool {
-        trace!("Removing {:?} from {}", pattern, slot);
-
         let possible_slot_patterns = self.slots.get_mut_world(slot);
         possible_slot_patterns.remove(pattern);
 
         let num_remaining_patterns_in_slot = possible_slot_patterns.len();
         if num_remaining_patterns_in_slot == 0 {
-            self.assert_slot_has_contradiction(pattern_group, slot);
+            self.check_slot_for_possible_patterns(pattern_group, slot);
             return true;
         }
         if num_remaining_patterns_in_slot == 1 {
