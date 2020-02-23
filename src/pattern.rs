@@ -16,10 +16,42 @@ pub struct PatternShape {
     pub offset_group: OffsetGroup,
 }
 
-/// Metadata about configurations of voxels, called "patterns," and how they are related.
-pub struct PatternGroup {
+pub struct PatternSampler {
     /// Count of each pattern in the source lattice. Equivalently, a prior distribution of patterns.
     weights: PatternMap<u32>,
+}
+
+impl PatternSampler {
+    pub fn new(weights: PatternMap<u32>) -> Self {
+        PatternSampler { weights }
+    }
+
+    /// Returns the number of occurences of `pattern` in the source data.
+    pub fn get_weight(&self, pattern: PatternId) -> u32 {
+        *self.weights.get(pattern)
+    }
+
+    pub fn num_patterns(&self) -> u16 {
+        self.weights.num_elements() as u16
+    }
+
+    /// Sample the possible patterns by their probability (weights) in the source data.
+    pub fn sample_pattern<R: Rng>(&self, possible_patterns: &PatternSet, rng: &mut R) -> PatternId {
+        let mut possible_weights = Vec::new();
+        let mut possible_patterns_vec = Vec::new();
+        for pattern in possible_patterns.iter() {
+            possible_weights.push(*self.weights.get(pattern));
+            possible_patterns_vec.push(pattern);
+        }
+        let dist = WeightedIndex::new(&possible_weights).unwrap();
+        let choice = dist.sample(rng);
+
+        possible_patterns_vec[choice]
+    }
+}
+
+/// Metadata about configurations of voxels, called "patterns," and how they are related.
+pub struct PatternGroup {
     /// One set of constraints for each pattern.
     pub constraints: SymmetricPatternConstraints,
 }
@@ -47,14 +79,14 @@ impl Id for PatternId {}
 const EMPTY_PATTERN_ID: PatternId = PatternId(std::u16::MAX);
 
 impl PatternGroup {
-    pub fn new(weights: PatternMap<u32>, constraints: SymmetricPatternConstraints) -> Self {
-        let me = PatternGroup {
-            weights,
-            constraints,
-        };
-        me.assert_valid();
+    pub fn new(constraints: SymmetricPatternConstraints) -> Self {
+        constraints.assert_valid();
 
-        me
+        PatternGroup { constraints }
+    }
+
+    pub fn num_patterns(&self) -> u16 {
+        self.constraints.num_patterns()
     }
 
     pub fn get_offset_group(&self) -> &OffsetGroup {
@@ -63,20 +95,6 @@ impl PatternGroup {
 
     pub fn get_initial_support(&self) -> PatternMap<PatternSupport> {
         self.constraints.get_initial_support()
-    }
-
-    pub fn assert_valid(&self) {
-        assert!(self.weights.num_elements() as u16 == self.constraints.num_patterns());
-        self.constraints.assert_valid();
-    }
-
-    /// Returns the number of occurences of the pattern `id` in the source data.
-    pub fn get_weight(&self, id: PatternId) -> u32 {
-        *self.weights.get(id)
-    }
-
-    pub fn num_patterns(&self) -> u16 {
-        self.weights.num_elements() as u16
     }
 
     pub fn iter_compatible(
@@ -96,23 +114,6 @@ impl PatternGroup {
         self.constraints
             .are_compatible(pattern, offset_pattern, offset)
     }
-
-    /// Sample the possible patterns by their probability (weights) in the source data.
-    pub fn sample_pattern<R>(&self, possible_patterns: &PatternSet, rng: &mut R) -> PatternId
-    where
-        R: Rng,
-    {
-        let mut possible_weights = Vec::new();
-        let mut possible_patterns_vec = Vec::new();
-        for pattern in possible_patterns.iter() {
-            possible_weights.push(*self.weights.get(pattern));
-            possible_patterns_vec.push(pattern);
-        }
-        let dist = WeightedIndex::new(&possible_weights).unwrap();
-        let choice = dist.sample(rng);
-
-        possible_patterns_vec[choice]
-    }
 }
 
 // TODO: support non-periodic indexer
@@ -123,7 +124,7 @@ pub fn process_patterns_in_lattice<T>(
     lattice: &Lattice<T, PeriodicYLevelsIndexer>,
     tile_size: &lat::Point,
     pattern_shape: &PatternShape,
-) -> (PatternGroup, PatternRepresentatives)
+) -> (PatternSampler, PatternGroup, PatternRepresentatives)
 where
     T: Clone + Copy + Eq + Hash,
 {
@@ -189,10 +190,9 @@ where
     sorted_weights.sort();
     println!("Weights = {:?}", sorted_weights);
 
-    let pattern_group = PatternGroup::new(pattern_weights, pattern_constraints);
-
     (
-        pattern_group,
+        PatternSampler::new(pattern_weights),
+        PatternGroup::new(pattern_constraints),
         PatternRepresentatives::new(pattern_representatives),
     )
 }

@@ -1,5 +1,5 @@
 use crate::{
-    pattern::{PatternGroup, PatternId, PatternSet},
+    pattern::{PatternGroup, PatternId, PatternSampler, PatternSet},
     wave::Wave,
 };
 
@@ -20,10 +20,11 @@ impl Generator {
     pub fn new(
         seed: [u8; NUM_SEED_BYTES],
         output_size: lat::Point,
+        pattern_sampler: &PatternSampler,
         pattern_group: &PatternGroup,
     ) -> Self {
         Generator {
-            wave: Wave::new(pattern_group, output_size),
+            wave: Wave::new(pattern_sampler, pattern_group, output_size),
             rng: SmallRng::from_seed(seed),
         }
     }
@@ -43,7 +44,9 @@ impl Generator {
         self.wave.num_collapsed()
     }
 
-    pub fn update(&mut self, pattern_group: &PatternGroup) -> UpdateResult {
+    pub fn update(
+        &mut self, pattern_sampler: &PatternSampler, pattern_group: &PatternGroup
+    ) -> UpdateResult {
         let (slot, entropy) = self.wave.choose_least_entropy_slot(&mut self.rng);
         debug!(
             "{} collapsed slots; chose slot {} with least entropy {}",
@@ -52,7 +55,7 @@ impl Generator {
             entropy
         );
 
-        if !self.wave.observe_slot(&mut self.rng, pattern_group, &slot) {
+        if !self.wave.observe_slot(&mut self.rng, pattern_sampler, pattern_group, &slot) {
             UpdateResult::Failure
         } else if self.wave.determined() {
             UpdateResult::Success
