@@ -181,8 +181,8 @@ where
             debug_assert!(offset_pattern != EMPTY_PATTERN_ID);
 
             pattern_constraints.add_compatible_patterns(&offset, pattern, offset_pattern);
-            *pattern_weights.get_mut(pattern) += 1;
         }
+        *pattern_weights.get_mut(pattern) += 1;
     }
 
     let mut sorted_weights = pattern_weights.get_raw().clone();
