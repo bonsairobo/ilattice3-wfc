@@ -1,9 +1,5 @@
 //! Implementation of Max Gumin's "Wave Function Collapse" algorithm for voxel maps.
 
-// TODO: example tests
-// Need a way to spot obvious regressions. It's simple enough to use a bunch of test data and see
-// that the generated output doesn't change.
-
 // TODO: mirror and rotational symmetries
 
 // TODO: non-periodic input lattice
