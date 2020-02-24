@@ -6,7 +6,7 @@ use crate::{
 };
 
 use ilattice3 as lat;
-use ilattice3::{Lattice, LatticeIndexer, VoxColor, EMPTY_VOX_COLOR};
+use ilattice3::{Lattice, LatticeIndexer, VoxColor, YLevelsIndexer, EMPTY_VOX_COLOR};
 use image::{self, gif, Delay, Frame, Rgba, RgbaImage};
 use std::fs::File;
 use std::path::PathBuf;
@@ -47,7 +47,7 @@ pub fn color_superposition(
             let mut color_sum = [0.0; 4];
             for pattern in patterns.iter() {
                 num_patterns += 1;
-                let tile = tiles.get(pattern).put_in_extent(&output_extent);
+                let tile = tiles.get(pattern).put_in_extent(YLevelsIndexer {}, output_extent);
                 let Rgba(p_color) = *tile.get_world(&p);
                 for i in 0..4 {
                     color_sum[i] += p_color[i] as f32;
@@ -80,7 +80,7 @@ where
     for p in &pattern_lattice.get_extent() {
         let output_extent = lat::Extent::from_min_and_local_supremum(p * *tile_size, *tile_size);
         let pattern = pattern_lattice.get_world(&p);
-        let tile = tiles.get(*pattern).put_in_extent(&output_extent);
+        let tile = tiles.get(*pattern).put_in_extent(YLevelsIndexer {}, output_extent);
         Lattice::copy_extent(&tile, &mut color_lattice, &output_extent);
     }
 

@@ -5,7 +5,7 @@ use crate::{
 
 use hibitset::{BitSet, BitSetLike};
 use ilattice3 as lat;
-use ilattice3::{Lattice, LatticeIndexer, PeriodicYLevelsIndexer, YLevelsIndexer};
+use ilattice3::{Lattice, LatticeIndexer, PeriodicYLevelsIndexer};
 use rand::prelude::*;
 use rand_distr::weighted::WeightedIndex;
 use std::collections::HashMap;
@@ -73,18 +73,19 @@ impl Id for PatternId {}
 const EMPTY_PATTERN_ID: PatternId = PatternId(std::u16::MAX);
 
 // TODO: support non-periodic indexer
-/// For each unique (up to translation) sublattice of `lattice`, create a `PatternId`, count the
-/// occurences of the pattern, and record the set of patterns that overlap with that pattern at each
-/// possible offset.
+
+/// For each unique (up to translation) sublattice of `input_lattice`, create a `PatternId`, count
+/// the occurences of the pattern, and record the set of patterns that overlap with that pattern at
+/// each possible offset.
 pub fn process_patterns_in_lattice<T>(
-    lattice: &Lattice<T, PeriodicYLevelsIndexer>,
+    input_lattice: &Lattice<T, PeriodicYLevelsIndexer>,
     tile_size: &lat::Point,
     pattern_shape: &PatternShape,
 ) -> (PatternSampler, PatternConstraints, PatternRepresentatives)
 where
-    T: Clone + Copy + Eq + Hash,
+    T: Clone + Copy + std::fmt::Debug + Eq + Hash,
 {
-    let full_extent = lattice.get_extent();
+    let full_extent = input_lattice.get_extent();
     let tiled_size = full_extent.get_local_supremum().div_ceil(tile_size);
     let tiled_extent = lat::Extent::from_min_and_local_supremum([0, 0, 0].into(), tiled_size);
     let pattern_size = pattern_shape.size * *tile_size;
@@ -93,7 +94,7 @@ where
     let mut patterns: HashMap<Vec<T>, PatternId> = HashMap::new();
     // Map pattern center to pattern ID.
     let mut pattern_lattice =
-        Lattice::fill_with_indexer(lattice.indexer, tiled_extent, EMPTY_PATTERN_ID);
+        Lattice::fill_with_indexer(input_lattice.indexer, tiled_extent, EMPTY_PATTERN_ID);
     // Map from pattern ID to sublattice.
     let mut pattern_representatives = Vec::new();
     // Map from pattern ID to # of occurrences.
@@ -105,7 +106,7 @@ where
         // Identify the pattern with the serialized values.
         let pattern_extent =
             lat::Extent::from_min_and_local_supremum(pattern_point * *tile_size, pattern_size);
-        let pattern_values = lattice.serialize_extent(&pattern_extent);
+        let pattern_values = input_lattice.serialize_extent(&pattern_extent);
         let pattern_id = patterns.entry(pattern_values).or_insert_with(|| {
             let this_pattern_id = PatternId(next_pattern_id);
             next_pattern_id += 1;
@@ -334,8 +335,10 @@ impl<C: Clone> Tile<C> {
     }
 
     /// Puts the tile in a specific location.
-    pub fn put_in_extent(&self, extent: &lat::Extent) -> Lattice<C> {
-        Lattice::<_, YLevelsIndexer>::deserialize(extent, &self.colors)
+    pub fn put_in_extent<I: LatticeIndexer>(
+        &self, indexer: I, extent: lat::Extent
+    ) -> Lattice<C, I> {
+        Lattice::new_with_indexer(extent, indexer, self.colors.clone())
     }
 }
 
