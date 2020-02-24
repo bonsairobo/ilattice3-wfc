@@ -54,7 +54,8 @@ impl PatternSampler {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PatternId(pub u16);
 
-pub const MAX_PATTERNS: u16 = std::u16::MAX;
+/// Limited by the support counts, which use i16.
+pub const MAX_PATTERNS: u16 = std::i16::MAX as u16;
 
 impl Into<usize> for PatternId {
     fn into(self) -> usize {
