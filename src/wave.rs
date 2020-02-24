@@ -121,7 +121,6 @@ impl Wave {
 
             for (offset_id, offset) in constraints.get_offset_group().iter() {
                 // Make sure we don't index out of bounds.
-                // TODO: for PeriodicLatticeIndexer, don't worry about this
                 let offset_slot = visit_slot + *offset;
                 if !self.get_slots().get_extent().contains_world(&offset_slot) {
                     continue;

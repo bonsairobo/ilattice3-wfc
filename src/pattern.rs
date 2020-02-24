@@ -73,8 +73,6 @@ impl Id for PatternId {}
 
 const EMPTY_PATTERN_ID: PatternId = PatternId(std::u16::MAX);
 
-// TODO: support non-periodic indexer
-
 /// For each unique (up to translation) sublattice of `input_lattice`, create a `PatternId`, count
 /// the occurences of the pattern, and record the set of patterns that overlap with that pattern at
 /// each possible offset.

@@ -77,6 +77,5 @@ pub enum UpdateResult {
     /// Further calls to `update` are required.
     Continue,
     /// The currently assigned patterns cannot satisfy the constraints.
-    /// TODO: backtracking can help alleviate this
     Failure,
 }

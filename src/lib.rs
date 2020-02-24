@@ -1,5 +1,18 @@
 //! Implementation of Max Gumin's "Wave Function Collapse" algorithm for voxel maps.
 
+// TODO: example tests
+// Need a way to spot obvious regressions. It's simple enough to use a bunch of test data and see
+// that the generated output doesn't change.
+
+// TODO: mirror and rotational symmetries
+
+// TODO: non-periodic input lattice
+
+// TODO: backtracking
+// The plan is to keep a log of collapse choices and for each one, a log of removals. Then the
+// remove_pattern operation needs to be made reversible. Then to reverse a collapse, we reverse all
+// of the removals that happened since, then choose a new collapse.
+
 #![feature(map_first_last)]
 
 mod generate;
