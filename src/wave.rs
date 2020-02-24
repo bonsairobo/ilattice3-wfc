@@ -154,7 +154,6 @@ impl Wave {
         constraints: &PatternConstraints,
         impossible_slot: &lat::Point,
     ) {
-        // Panic if we find any pattern that's supported by some possible pattern at each offset.
         'check_pattern: for pattern in 0..constraints.num_patterns() {
             let pattern = PatternId(pattern);
             'check_offset: for (offset_id, offset) in constraints.get_offset_group().iter() {
