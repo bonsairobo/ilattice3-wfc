@@ -351,7 +351,8 @@ pub fn find_pattern_tiles_in_lattice<I: LatticeIndexer, C: Clone, G: Clone + Int
     let tiles = representatives
         .iter()
         .map(|(_, extent)| {
-            // Representatives track the entire pattern, but we only need the tile where the pattern is.
+            // Representatives track the entire pattern, but we only need the tile where the pattern
+            // is.
             let tile_extent =
                 lat::Extent::from_min_and_local_supremum(extent.get_minimum(), *tile_size);
 
