@@ -234,11 +234,11 @@ fn generate_image(
         input_lattice.get_extent().get_local_supremum()
     );
 
-    let (pattern_sampler, pattern_constraints, representatives) =
+    let (sampler, constraints, representatives) =
         process_patterns_in_lattice(&input_lattice, &tile_size, &pattern_shape);
     println!(
         "Found {} patterns in input lattice",
-        pattern_constraints.num_patterns()
+        constraints.num_patterns()
     );
 
     if let Some(palette_path) = args.palette {
@@ -257,14 +257,14 @@ fn generate_image(
 
     if let Some(result) = generate(
         seed,
-        &pattern_sampler,
-        &pattern_constraints,
+        &sampler,
+        &constraints,
         output_size,
         &mut gif_maker,
         running,
     ) {
         assert!(
-            pattern_constraints.assignment_is_valid(&result),
+            constraints.assignment_is_valid(&result),
             "BUG: produced output that doesn't satisfy constraints"
         );
         let colors = color_final_patterns_rgba(&result, &pattern_tiles, &tile_size);
@@ -295,19 +295,19 @@ fn generate_vox(
         input_lattice.get_extent().get_local_supremum()
     );
 
-    let (pattern_sampler, pattern_constraints, representatives) =
+    let (sampler, constraints, representatives) =
         process_patterns_in_lattice(&input_lattice, &tile_size, &pattern_shape);
     println!(
         "Found {} patterns in input lattice",
-        pattern_constraints.num_patterns()
+        constraints.num_patterns()
     );
 
     let pattern_tiles = find_pattern_tiles_in_lattice(&input_lattice, &representatives, &tile_size);
 
     if let Some(result) = generate::<NilFrameConsumer>(
         seed,
-        &pattern_sampler,
-        &pattern_constraints,
+        &sampler,
+        &constraints,
         output_size,
         &mut None,
         running,
@@ -325,8 +325,8 @@ fn generate_vox(
 
 fn generate<F>(
     seed: [u8; 16],
-    pattern_sampler: &PatternSampler,
-    pattern_constraints: &PatternConstraints,
+    sampler: &PatternSampler,
+    constraints: &PatternConstraints,
     output_size: lat::Point,
     frame_consumer: &mut Option<F>,
     running: Arc<AtomicBool>,
@@ -339,11 +339,11 @@ where
     let volume = lat::Extent::from_min_and_local_supremum([0, 0, 0].into(), output_size).volume();
     let progress_bar = ProgressBar::new(volume as u64);
 
-    let mut generator = Generator::new(seed, output_size, pattern_sampler, pattern_constraints);
+    let mut generator = Generator::new(seed, output_size, sampler, constraints);
     let mut success = true;
     println!("Generating...");
     loop {
-        let state = generator.update(pattern_sampler, pattern_constraints);
+        let state = generator.update(sampler, constraints);
         progress_bar.set_position(generator.num_collapsed() as u64);
         match state {
             UpdateResult::Success => break,

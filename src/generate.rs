@@ -20,11 +20,11 @@ impl Generator {
     pub fn new(
         seed: [u8; NUM_SEED_BYTES],
         output_size: lat::Point,
-        pattern_sampler: &PatternSampler,
-        pattern_constraints: &PatternConstraints,
+        sampler: &PatternSampler,
+        constraints: &PatternConstraints,
     ) -> Self {
         Generator {
-            wave: Wave::new(pattern_sampler, pattern_constraints, output_size),
+            wave: Wave::new(sampler, constraints, output_size),
             rng: SmallRng::from_seed(seed),
         }
     }
@@ -46,8 +46,8 @@ impl Generator {
 
     pub fn update(
         &mut self,
-        pattern_sampler: &PatternSampler,
-        pattern_constraints: &PatternConstraints,
+        sampler: &PatternSampler,
+        constraints: &PatternConstraints,
     ) -> UpdateResult {
         let (slot, entropy) = self.wave.choose_least_entropy_slot(&mut self.rng);
         debug!(
@@ -59,7 +59,7 @@ impl Generator {
 
         if !self
             .wave
-            .observe_slot(&mut self.rng, pattern_sampler, pattern_constraints, &slot)
+            .observe_slot(&mut self.rng, sampler, constraints, &slot)
         {
             UpdateResult::Failure
         } else if self.wave.determined() {

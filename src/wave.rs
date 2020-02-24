@@ -33,21 +33,21 @@ pub struct Wave {
 
 impl Wave {
     pub fn new(
-        pattern_sampler: &PatternSampler,
-        pattern_constraints: &PatternConstraints,
+        sampler: &PatternSampler,
+        constraints: &PatternConstraints,
         output_size: lat::Point,
     ) -> Self {
         // Start with all possible patterns.
-        let all_possible = PatternSet::all(pattern_constraints.num_patterns());
+        let all_possible = PatternSet::all(constraints.num_patterns());
 
         let extent = lat::Extent::from_min_and_world_supremum([0, 0, 0].into(), output_size);
         let slots = Lattice::fill(extent, all_possible.clone());
 
-        let initial_entropy = slot_entropy(pattern_sampler, &all_possible);
+        let initial_entropy = slot_entropy(sampler, &all_possible);
         debug!("Initial entropy = {:?}", initial_entropy);
         let entropy_cache = Lattice::fill(extent, initial_entropy);
 
-        let initial_supports = pattern_constraints.get_initial_support();
+        let initial_supports = constraints.get_initial_support();
         let pattern_supports = Lattice::fill(extent, initial_supports);
 
         Wave {
@@ -92,24 +92,24 @@ impl Wave {
     pub fn observe_slot<R: Rng>(
         &mut self,
         rng: &mut R,
-        pattern_sampler: &PatternSampler,
-        pattern_constraints: &PatternConstraints,
+        sampler: &PatternSampler,
+        constraints: &PatternConstraints,
         slot: &lat::Point,
     ) -> bool {
         let possible_patterns = self.get_slot(slot);
-        let pattern = pattern_sampler.sample_pattern(possible_patterns, rng);
+        let pattern = sampler.sample_pattern(possible_patterns, rng);
         debug!("Assigning {:?}", pattern);
 
-        self.collapse_slot(pattern_sampler, pattern_constraints, slot, pattern);
+        self.collapse_slot(sampler, constraints, slot, pattern);
 
-        self.propagate_constraints(pattern_sampler, pattern_constraints)
+        self.propagate_constraints(sampler, constraints)
     }
 
     /// Returns `false` iff we find a slot with no possible patterns.
     fn propagate_constraints(
         &mut self,
-        pattern_sampler: &PatternSampler,
-        pattern_constraints: &PatternConstraints,
+        sampler: &PatternSampler,
+        constraints: &PatternConstraints,
     ) -> bool {
         // This algorithm is similar to flood fill, but each slot may need to be visited multiple
         // times.
@@ -119,7 +119,7 @@ impl Wave {
             let (visit_slot, impossible_at_visit_slot) = self.removal_stack.pop().unwrap();
             let visit_slot = self.slots.local_point_from_index(visit_slot.0);
 
-            for (offset_id, offset) in pattern_constraints.get_offset_group().iter() {
+            for (offset_id, offset) in constraints.get_offset_group().iter() {
                 // Make sure we don't index out of bounds.
                 // TODO: for PeriodicLatticeIndexer, don't worry about this
                 let offset_slot = visit_slot + *offset;
@@ -130,16 +130,12 @@ impl Wave {
                 // Remove support. We detect that a pattern is not possible in a slot if it runs out
                 // of supporting adjacent patterns.
                 for offset_pattern in
-                    pattern_constraints.iter_compatible(impossible_at_visit_slot, offset_id)
+                    constraints.iter_compatible(impossible_at_visit_slot, offset_id)
                 {
                     let no_support = self.remove_support(&offset_slot, offset_pattern, offset_id);
                     if no_support {
-                        let slot_empty = self.remove_pattern(
-                            pattern_sampler,
-                            pattern_constraints,
-                            &offset_slot,
-                            offset_pattern,
-                        );
+                        let slot_empty =
+                            self.remove_pattern(sampler, constraints, &offset_slot, offset_pattern);
                         if slot_empty {
                             // Failed to fully assign the output lattice. Give up.
                             warn!("No possible patterns for {}", offset_slot);
@@ -156,17 +152,16 @@ impl Wave {
     /// Even though this slot has no patterns, it may be recoverable (if it was collapsed).
     fn check_slot_for_possible_patterns(
         &self,
-        pattern_constraints: &PatternConstraints,
+        constraints: &PatternConstraints,
         impossible_slot: &lat::Point,
     ) {
         // Panic if we find any pattern that's supported by some possible pattern at each offset.
-        'check_pattern: for pattern in 0..pattern_constraints.num_patterns() {
+        'check_pattern: for pattern in 0..constraints.num_patterns() {
             let pattern = PatternId(pattern);
-            'check_offset: for (offset_id, offset) in pattern_constraints.get_offset_group().iter()
-            {
+            'check_offset: for (offset_id, offset) in constraints.get_offset_group().iter() {
                 let offset_slot = *impossible_slot + *offset;
                 for offset_pattern in self.slots.get_local(&offset_slot).iter() {
-                    if pattern_constraints.are_compatible(pattern, offset_pattern, offset_id) {
+                    if constraints.are_compatible(pattern, offset_pattern, offset_id) {
                         // Offset pattern is compatible with our pattern. Check the next offset.
                         continue 'check_offset;
                     }
@@ -187,8 +182,8 @@ impl Wave {
     /// Returns `true` iff the slot is empty after removal.
     fn remove_pattern(
         &mut self,
-        pattern_sampler: &PatternSampler,
-        pattern_constraints: &PatternConstraints,
+        sampler: &PatternSampler,
+        constraints: &PatternConstraints,
         slot: &lat::Point,
         pattern: PatternId,
     ) -> bool {
@@ -197,7 +192,7 @@ impl Wave {
 
         let num_remaining_patterns_in_slot = possible_slot_patterns.len();
         if num_remaining_patterns_in_slot == 0 {
-            self.check_slot_for_possible_patterns(pattern_constraints, slot);
+            self.check_slot_for_possible_patterns(constraints, slot);
             return true;
         }
         if num_remaining_patterns_in_slot == 1 {
@@ -205,7 +200,7 @@ impl Wave {
             self.set_max_entropy(slot);
             self.collapsed_count += 1;
         } else {
-            self.reduce_entropy(pattern_sampler, slot, pattern);
+            self.reduce_entropy(sampler, slot, pattern);
         }
 
         // Even though this pattern is being removed, it may still have support at some offsets.
@@ -221,8 +216,8 @@ impl Wave {
 
     fn collapse_slot(
         &mut self,
-        pattern_sampler: &PatternSampler,
-        pattern_constraints: &PatternConstraints,
+        sampler: &PatternSampler,
+        constraints: &PatternConstraints,
         slot: &lat::Point,
         assign_pattern: PatternId,
     ) {
@@ -232,18 +227,18 @@ impl Wave {
             set.iter().filter(|p| *p != assign_pattern).collect()
         };
         for pattern in remove_patterns.iter() {
-            self.remove_pattern(pattern_sampler, pattern_constraints, slot, *pattern);
+            self.remove_pattern(sampler, constraints, slot, *pattern);
         }
     }
 
     fn reduce_entropy(
         &mut self,
-        pattern_sampler: &PatternSampler,
+        sampler: &PatternSampler,
         slot: &lat::Point,
         remove_pattern: PatternId,
     ) {
         let cache = self.entropy_cache.get_mut_world(slot);
-        let weight = pattern_sampler.get_weight(remove_pattern) as f32;
+        let weight = sampler.get_weight(remove_pattern) as f32;
         cache.sum_weights -= weight;
         cache.sum_weights_log_weights -= weight * weight.log2();
         cache.entropy = entropy(cache.sum_weights, cache.sum_weights_log_weights);
@@ -286,10 +281,7 @@ fn entropy(sum_weights: f32, sum_weights_log_weights: f32) -> f32 {
     sum_weights.log2() - sum_weights_log_weights / sum_weights
 }
 
-fn slot_entropy(
-    pattern_sampler: &PatternSampler,
-    possible_patterns: &PatternSet,
-) -> SlotEntropyCache {
+fn slot_entropy(sampler: &PatternSampler, possible_patterns: &PatternSet) -> SlotEntropyCache {
     assert!(!possible_patterns.is_empty());
 
     // Collapsed slots shouldn't be chosen.
@@ -305,7 +297,7 @@ fn slot_entropy(
     let mut sum_weights = 0.0;
     let mut sum_weights_log_weights = 0.0;
     for pattern in possible_patterns.iter() {
-        let weight = pattern_sampler.get_weight(pattern) as f32;
+        let weight = sampler.get_weight(pattern) as f32;
         sum_weights += weight;
         sum_weights_log_weights += weight * weight.log2();
     }

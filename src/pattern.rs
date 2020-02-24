@@ -128,7 +128,7 @@ where
             num_patterns, MAX_PATTERNS
         );
     }
-    let mut pattern_constraints =
+    let mut constraints =
         PatternConstraints::new(pattern_shape.offset_group.clone(), num_patterns as u16);
     for pattern_point in tiled_extent.into_iter() {
         let pattern = *pattern_lattice.get_local(&pattern_point);
@@ -138,12 +138,12 @@ where
             let offset_pattern = *pattern_lattice.get_local(&offset_point);
             debug_assert!(offset_pattern != EMPTY_PATTERN_ID);
 
-            pattern_constraints.add_compatible_patterns(&offset, pattern, offset_pattern);
+            constraints.add_compatible_patterns(&offset, pattern, offset_pattern);
         }
         *pattern_weights.get_mut(pattern) += 1;
     }
 
-    pattern_constraints.assert_valid();
+    constraints.assert_valid();
 
     let mut sorted_weights = pattern_weights.get_raw().clone();
     sorted_weights.sort();
@@ -151,7 +151,7 @@ where
 
     (
         PatternSampler::new(pattern_weights),
-        pattern_constraints,
+        constraints,
         PatternRepresentatives::new(pattern_representatives),
     )
 }
@@ -336,7 +336,9 @@ impl<C: Clone> Tile<C> {
 
     /// Puts the tile in a specific location.
     pub fn put_in_extent<I: LatticeIndexer>(
-        &self, indexer: I, extent: lat::Extent
+        &self,
+        indexer: I,
+        extent: lat::Extent,
     ) -> Lattice<C, I> {
         Lattice::new_with_indexer(extent, indexer, self.colors.clone())
     }
