@@ -5,7 +5,7 @@ use crate::{
 
 use hibitset::{BitSet, BitSetLike};
 use ilattice3 as lat;
-use ilattice3::{Lattice, LatticeIndexer, PeriodicYLevelsIndexer};
+use ilattice3::{Indexer, Lattice, PeriodicYLevelsIndexer, Tile};
 use rand::prelude::*;
 use rand_distr::weighted::WeightedIndex;
 use std::collections::HashMap;
@@ -155,6 +155,26 @@ where
     )
 }
 
+pub fn find_pattern_tiles_in_lattice<I: Indexer, C: Clone, G: Clone + Into<C>>(
+    lattice: &Lattice<G, I>,
+    representatives: &PatternRepresentatives,
+    tile_size: &lat::Point,
+) -> PatternMap<Tile<C, I>> {
+    let tiles = representatives
+        .iter()
+        .map(|(_, extent)| {
+            // Representatives track the entire pattern, but we only need the tile where the pattern
+            // is.
+            let tile_extent =
+                lat::Extent::from_min_and_local_supremum(extent.get_minimum(), *tile_size);
+
+            Tile::get_from_lattice(lattice, &tile_extent)
+        })
+        .collect();
+
+    PatternMap::new(tiles)
+}
+
 pub type PatternRepresentatives = PatternMap<lat::Extent>;
 
 /// Used to build the set of pattern relations. Enforces symmetry of the `compatible` relation.
@@ -258,10 +278,7 @@ impl PatternConstraints {
         pattern_supports
     }
 
-    pub fn assignment_is_valid<I: LatticeIndexer>(
-        &self,
-        assignment: &Lattice<PatternId, I>,
-    ) -> bool {
+    pub fn assignment_is_valid<I: Indexer>(&self, assignment: &Lattice<PatternId, I>) -> bool {
         let extent = assignment.get_extent();
         for p in extent {
             let pattern = assignment.get_world(&p);
@@ -303,64 +320,6 @@ impl PatternSupport {
             .iter_mut()
             .for_each(|(_offset, count)| *count = 0);
     }
-}
-
-/// One unit of the input/output lattice. May contain many voxels.
-#[derive(Clone, Eq, PartialEq)]
-pub struct Tile<C> {
-    colors: Vec<C>,
-}
-
-impl<C: Clone> Tile<C> {
-    pub fn new(colors: Vec<C>) -> Self {
-        Tile { colors }
-    }
-
-    pub fn get_colors(&self) -> &[C] {
-        &self.colors
-    }
-
-    pub fn get_from_lattice<I: LatticeIndexer, G: Clone + Into<C>>(
-        lattice: &Lattice<G, I>,
-        extent: &lat::Extent,
-    ) -> Tile<C> {
-        Tile::new(
-            lattice
-                .serialize_extent(extent)
-                .into_iter()
-                .map(|g| g.into())
-                .collect::<Vec<C>>(),
-        )
-    }
-
-    /// Puts the tile in a specific location.
-    pub fn put_in_extent<I: LatticeIndexer>(
-        &self,
-        indexer: I,
-        extent: lat::Extent,
-    ) -> Lattice<C, I> {
-        Lattice::new_with_indexer(extent, indexer, self.colors.clone())
-    }
-}
-
-pub fn find_pattern_tiles_in_lattice<I: LatticeIndexer, C: Clone, G: Clone + Into<C>>(
-    lattice: &Lattice<G, I>,
-    representatives: &PatternRepresentatives,
-    tile_size: &lat::Point,
-) -> PatternMap<Tile<C>> {
-    let tiles = representatives
-        .iter()
-        .map(|(_, extent)| {
-            // Representatives track the entire pattern, but we only need the tile where the pattern
-            // is.
-            let tile_extent =
-                lat::Extent::from_min_and_local_supremum(extent.get_minimum(), *tile_size);
-
-            Tile::get_from_lattice(lattice, &tile_extent)
-        })
-        .collect();
-
-    PatternMap::new(tiles)
 }
 
 pub type PatternMap<T> = StaticVec<PatternId, T>;
