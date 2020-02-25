@@ -84,25 +84,31 @@ pub fn process_patterns_in_lattice<T>(
 where
     T: Clone + Copy + std::fmt::Debug + Eq + Hash,
 {
-    let full_extent = input_lattice.get_extent();
-    let tiled_size = full_extent.get_local_supremum().div_ceil(tile_size);
-    let tiled_extent = lat::Extent::from_min_and_local_supremum([0, 0, 0].into(), tiled_size);
+    let input_extent = input_lattice.get_extent();
     let pattern_size = pattern_shape.size * *tile_size;
+    let pattern_lattice_size = input_extent.get_local_supremum().div_ceil(tile_size);
 
+    let mut num_patterns = 0;
     // Map sublattice data to pattern ID.
     let mut patterns: HashMap<Tile<T, _>, PatternId> = HashMap::new();
     // Min corner tile of each pattern.
     let mut pattern_min_tiles = Vec::new();
+    // Map from pattern ID to # of occurrences.
+    let mut pattern_weights = PatternMap::new(Vec::new());
+
+    let mut constraints = PatternConstraints::new(pattern_shape.offset_group.clone());
+
+    let pattern_lattice_extent = lat::Extent::from_min_and_local_supremum(
+        [0, 0, 0].into(), pattern_lattice_size
+    );
+
     // Map pattern center to pattern ID.
     let mut pattern_lattice = Lattice::<_, PeriodicYLevelsIndexer>::fill(
-        tiled_extent, EMPTY_PATTERN_ID
+        pattern_lattice_extent, EMPTY_PATTERN_ID
     );
-    // Map from pattern ID to # of occurrences.
-    let mut pattern_weights = Vec::new();
 
     // Index the patterns.
-    let mut next_pattern_id = 0;
-    for pattern_point in tiled_extent.into_iter() {
+    for pattern_point in pattern_lattice_extent.into_iter() {
         // Identify the pattern with the serialized values.
         let pattern_min = pattern_point * *tile_size;
         let pattern_extent = lat::Extent::from_min_and_local_supremum(pattern_min, pattern_size);
@@ -112,8 +118,17 @@ where
         let pattern_min_tile = Tile::get_from_lattice(input_lattice, &tile_extent);
 
         let pattern_id = patterns.entry(pattern).or_insert_with(|| {
-            let this_pattern_id = PatternId(next_pattern_id);
-            next_pattern_id += 1;
+            let this_pattern_id = PatternId(num_patterns);
+
+            num_patterns += 1;
+            if num_patterns > MAX_PATTERNS {
+                panic!(
+                    "Too many patterns ({}), maximum is {}",
+                    num_patterns, MAX_PATTERNS
+                );
+            }
+
+            constraints.add_pattern();
             pattern_weights.push(0);
             pattern_min_tiles.push(pattern_min_tile);
 
@@ -122,19 +137,8 @@ where
         *pattern_lattice.get_mut_local(&pattern_point) = *pattern_id;
     }
 
-    let mut pattern_weights = PatternMap::new(pattern_weights);
-
     // Set the constraints and count pattern occurences.
-    let num_patterns = patterns.len();
-    if num_patterns > MAX_PATTERNS as usize {
-        panic!(
-            "Too many patterns ({}), maximum is {}",
-            num_patterns, MAX_PATTERNS
-        );
-    }
-    let mut constraints =
-        PatternConstraints::new(pattern_shape.offset_group.clone(), num_patterns as u16);
-    for pattern_point in tiled_extent.into_iter() {
+    for pattern_point in pattern_lattice_extent.into_iter() {
         let pattern = *pattern_lattice.get_local(&pattern_point);
         debug_assert!(pattern != EMPTY_PATTERN_ID);
         for (_, offset) in pattern_shape.offset_group.iter() {
@@ -170,19 +174,18 @@ pub struct TileSet<T, I> {
 pub struct PatternConstraints {
     constraints: PatternMap<OffsetMap<BitSet>>,
     offset_group: OffsetGroup,
-    num_patterns: u16,
 }
 
 impl PatternConstraints {
-    pub fn new(offset_group: OffsetGroup, num_patterns: u16) -> Self {
+    pub fn new(offset_group: OffsetGroup) -> Self {
         Self {
-            constraints: PatternMap::fill(
-                OffsetMap::fill(BitSet::new(), offset_group.num_offsets()),
-                num_patterns as usize,
-            ),
+            constraints: PatternMap::new(Vec::new()),
             offset_group,
-            num_patterns,
         }
+    }
+
+    pub fn add_pattern(&mut self) {
+        self.constraints.push(OffsetMap::fill(BitSet::new(), self.offset_group.num_offsets()));
     }
 
     pub fn get_offset_group(&self) -> &OffsetGroup {
@@ -198,7 +201,7 @@ impl PatternConstraints {
     }
 
     pub fn num_patterns(&self) -> u16 {
-        self.num_patterns
+        self.constraints.num_elements() as u16
     }
 
     pub fn iter_compatible(

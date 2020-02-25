@@ -2,8 +2,6 @@
 
 // TODO: mirror and rotational symmetries
 
-// TODO: non-periodic input lattice
-
 // TODO: backtracking
 // The plan is to keep a log of collapse choices and for each one, a log of removals. Then the
 // remove_pattern operation needs to be made reversible. Then to reverse a collapse, we reverse all

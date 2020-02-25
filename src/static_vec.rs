@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-/// A vector that doesn't change size, so all references (IDs) are always valid.
+/// A vector that doesn't shrink, so all references (IDs) are always valid.
 #[derive(Clone)]
 pub struct StaticVec<I, T> {
     data: Vec<T>,
@@ -60,5 +60,11 @@ impl<I: Id, T> StaticVec<I, T> {
 
     pub fn get_raw(&self) -> &Vec<T> {
         &self.data
+    }
+
+    pub fn push(&mut self, datum: T) -> I {
+        self.data.push(datum);
+
+        self.data.len().into()
     }
 }
