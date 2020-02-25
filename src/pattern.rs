@@ -92,8 +92,9 @@ where
     // Map sublattice data to pattern ID.
     let mut patterns: HashMap<Vec<T>, PatternId> = HashMap::new();
     // Map pattern center to pattern ID.
-    let mut pattern_lattice =
-        Lattice::fill_with_indexer(input_lattice.indexer, tiled_extent, EMPTY_PATTERN_ID);
+    let mut pattern_lattice = Lattice::<_, PeriodicYLevelsIndexer>::fill(
+        tiled_extent, EMPTY_PATTERN_ID
+    );
     // Map from pattern ID to sublattice.
     let mut pattern_representatives = Vec::new();
     // Map from pattern ID to # of occurrences.
