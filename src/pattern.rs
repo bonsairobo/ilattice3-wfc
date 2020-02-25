@@ -90,13 +90,11 @@ where
     let pattern_size = pattern_shape.size * *tile_size;
 
     // Map sublattice data to pattern ID.
-    let mut patterns: HashMap<Vec<T>, PatternId> = HashMap::new();
+    let mut patterns: HashMap<Tile<_, _>, PatternId> = HashMap::new();
     // Map pattern center to pattern ID.
     let mut pattern_lattice = Lattice::<_, PeriodicYLevelsIndexer>::fill(
         tiled_extent, EMPTY_PATTERN_ID
     );
-    // Map from pattern ID to sublattice.
-    let mut pattern_tiles = Vec::new();
     // Map from pattern ID to # of occurrences.
     let mut pattern_weights = Vec::new();
 
@@ -106,11 +104,10 @@ where
         // Identify the pattern with the serialized values.
         let pattern_extent =
             lat::Extent::from_min_and_local_supremum(pattern_point * *tile_size, pattern_size);
-        let pattern_values = input_lattice.serialize_extent(&pattern_extent);
-        let pattern_id = patterns.entry(pattern_values).or_insert_with(|| {
+        let tile = Tile::get_from_lattice(input_lattice, &pattern_extent);
+        let pattern_id = patterns.entry(tile).or_insert_with(|| {
             let this_pattern_id = PatternId(next_pattern_id);
             next_pattern_id += 1;
-            pattern_tiles.push(Tile::get_from_lattice(input_lattice, &pattern_extent));
             pattern_weights.push(0);
 
             this_pattern_id
@@ -148,6 +145,8 @@ where
     let mut sorted_weights = pattern_weights.get_raw().clone();
     sorted_weights.sort();
     println!("Weights = {:?}", sorted_weights);
+
+    let pattern_tiles = patterns.into_iter().map(|(k, _v)| k).collect();
 
     (
         PatternSampler::new(pattern_weights),
