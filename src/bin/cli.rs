@@ -234,7 +234,7 @@ fn generate_image(
         input_lattice.get_extent().get_local_supremum()
     );
 
-    let (sampler, constraints, representatives) =
+    let (sampler, constraints, pattern_tiles) =
         process_patterns_in_lattice(&input_lattice, &tile_size, &pattern_shape);
     println!(
         "Found {} patterns in input lattice",
@@ -243,17 +243,15 @@ fn generate_image(
 
     if let Some(palette_path) = args.palette {
         // Save the palette image for debugging.
-        let palette_lattice = make_palette_lattice(&input_lattice, &representatives);
+        let palette_lattice = make_palette_lattice(&pattern_tiles);
         let palette_img: RgbaImage = (&palette_lattice).into();
         palette_img.save(palette_path)?;
     }
 
-    let pattern_tiles = find_pattern_tiles_in_lattice(&input_lattice, &representatives, &tile_size);
-
     let skip_frames = args.skip_frames;
     let mut gif_maker = args
         .gif
-        .map(|gif_path| GifMaker::new(gif_path, pattern_tiles.clone(), tile_size, skip_frames));
+        .map(|gif_path| GifMaker::new(gif_path, pattern_tiles.clone(), skip_frames));
 
     if let Some(result) = generate(
         seed,
@@ -267,7 +265,7 @@ fn generate_image(
             constraints.assignment_is_valid(&result),
             "BUG: produced output that doesn't satisfy constraints"
         );
-        let colors = color_final_patterns_rgba(&result, &pattern_tiles, &tile_size);
+        let colors = color_final_patterns_rgba(&result, &pattern_tiles);
         let final_img: RgbaImage = (&colors).into();
         println!("Writing {:?}", args.output_path);
         final_img.save(args.output_path)?;
@@ -295,14 +293,12 @@ fn generate_vox(
         input_lattice.get_extent().get_local_supremum()
     );
 
-    let (sampler, constraints, representatives) =
+    let (sampler, constraints, pattern_tiles) =
         process_patterns_in_lattice(&input_lattice, &tile_size, &pattern_shape);
     println!(
         "Found {} patterns in input lattice",
         constraints.num_patterns()
     );
-
-    let pattern_tiles = find_pattern_tiles_in_lattice(&input_lattice, &representatives, &tile_size);
 
     if let Some(result) = generate::<NilFrameConsumer>(
         seed,
@@ -312,7 +308,7 @@ fn generate_vox(
         &mut None,
         running,
     ) {
-        let colors = color_final_patterns_vox(&result, &pattern_tiles, &tile_size);
+        let colors = color_final_patterns_vox(&result, &pattern_tiles);
         let mut vox_data: DotVoxData = colors.into();
         vox_data.palette = color_palette.colors;
         println!("Writing {:?}", args.output_path);

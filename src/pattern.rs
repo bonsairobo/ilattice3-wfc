@@ -80,7 +80,7 @@ pub fn process_patterns_in_lattice<T>(
     input_lattice: &Lattice<T, PeriodicYLevelsIndexer>,
     tile_size: &lat::Point,
     pattern_shape: &PatternShape,
-) -> (PatternSampler, PatternConstraints, PatternRepresentatives)
+) -> (PatternSampler, PatternConstraints, TileSet<T, PeriodicYLevelsIndexer>)
 where
     T: Clone + Copy + std::fmt::Debug + Eq + Hash,
 {
@@ -96,7 +96,7 @@ where
         tiled_extent, EMPTY_PATTERN_ID
     );
     // Map from pattern ID to sublattice.
-    let mut pattern_representatives = Vec::new();
+    let mut pattern_tiles = Vec::new();
     // Map from pattern ID to # of occurrences.
     let mut pattern_weights = Vec::new();
 
@@ -110,7 +110,7 @@ where
         let pattern_id = patterns.entry(pattern_values).or_insert_with(|| {
             let this_pattern_id = PatternId(next_pattern_id);
             next_pattern_id += 1;
-            pattern_representatives.push(pattern_extent);
+            pattern_tiles.push(Tile::get_from_lattice(input_lattice, &pattern_extent));
             pattern_weights.push(0);
 
             this_pattern_id
@@ -152,31 +152,15 @@ where
     (
         PatternSampler::new(pattern_weights),
         constraints,
-        PatternRepresentatives::new(pattern_representatives),
+        TileSet { tiles: PatternMap::new(pattern_tiles), tile_size: pattern_size, }
     )
 }
 
-pub fn find_pattern_tiles_in_lattice<I: Indexer, C: Clone, G: Clone + Into<C>>(
-    lattice: &Lattice<G, I>,
-    representatives: &PatternRepresentatives,
-    tile_size: &lat::Point,
-) -> PatternMap<Tile<C, I>> {
-    let tiles = representatives
-        .iter()
-        .map(|(_, extent)| {
-            // Representatives track the entire pattern, but we only need the tile where the pattern
-            // is.
-            let tile_extent =
-                lat::Extent::from_min_and_local_supremum(extent.get_minimum(), *tile_size);
-
-            Tile::get_from_lattice(lattice, &tile_extent)
-        })
-        .collect();
-
-    PatternMap::new(tiles)
+#[derive(Clone)]
+pub struct TileSet<T, I> {
+    pub tiles: PatternMap<Tile<T, I>>,
+    pub tile_size: lat::Point,
 }
-
-pub type PatternRepresentatives = PatternMap<lat::Extent>;
 
 /// Used to build the set of pattern relations. Enforces symmetry of the `compatible` relation.
 pub struct PatternConstraints {
