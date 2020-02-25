@@ -90,7 +90,9 @@ where
     let pattern_size = pattern_shape.size * *tile_size;
 
     // Map sublattice data to pattern ID.
-    let mut patterns: HashMap<Tile<_, _>, PatternId> = HashMap::new();
+    let mut patterns: HashMap<Tile<T, _>, PatternId> = HashMap::new();
+    // Min corner tile of each pattern.
+    let mut pattern_min_tiles = Vec::new();
     // Map pattern center to pattern ID.
     let mut pattern_lattice = Lattice::<_, PeriodicYLevelsIndexer>::fill(
         tiled_extent, EMPTY_PATTERN_ID
@@ -102,13 +104,18 @@ where
     let mut next_pattern_id = 0;
     for pattern_point in tiled_extent.into_iter() {
         // Identify the pattern with the serialized values.
-        let pattern_extent =
-            lat::Extent::from_min_and_local_supremum(pattern_point * *tile_size, pattern_size);
-        let tile = Tile::get_from_lattice(input_lattice, &pattern_extent);
-        let pattern_id = patterns.entry(tile).or_insert_with(|| {
+        let pattern_min = pattern_point * *tile_size;
+        let pattern_extent = lat::Extent::from_min_and_local_supremum(pattern_min, pattern_size);
+        let tile_extent = lat::Extent::from_min_and_local_supremum(pattern_min, *tile_size);
+
+        let pattern = Tile::get_from_lattice(input_lattice, &pattern_extent);
+        let pattern_min_tile = Tile::get_from_lattice(input_lattice, &tile_extent);
+
+        let pattern_id = patterns.entry(pattern).or_insert_with(|| {
             let this_pattern_id = PatternId(next_pattern_id);
             next_pattern_id += 1;
             pattern_weights.push(0);
+            pattern_min_tiles.push(pattern_min_tile);
 
             this_pattern_id
         });
@@ -146,12 +153,10 @@ where
     sorted_weights.sort();
     println!("Weights = {:?}", sorted_weights);
 
-    let pattern_tiles = patterns.into_iter().map(|(k, _v)| k).collect();
-
     (
         PatternSampler::new(pattern_weights),
         constraints,
-        TileSet { tiles: PatternMap::new(pattern_tiles), tile_size: pattern_size, }
+        TileSet { tiles: PatternMap::new(pattern_min_tiles), tile_size: *tile_size, }
     )
 }
 

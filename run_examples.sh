@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+cargo build --release
+
 RUST_BACKTRACE=1 target/release/cli test_data/flowers.png out_flowers.png -o 128 128 1 -s flowerdaddy -p 2 2 1 -t 1 1 1
 diff out_flowers.png test_data/output/flowers_flowerdaddy.png
 rm out_flowers.png
