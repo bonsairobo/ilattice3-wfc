@@ -67,6 +67,7 @@ impl Into<usize> for PatternId {
 
 impl From<usize> for PatternId {
     fn from(other: usize) -> PatternId {
+        debug_assert!(other <= MAX_PATTERNS as usize);
         PatternId(other as u16)
     }
 }
