@@ -107,6 +107,7 @@ where
                 &transformed_tile_lattice, &normalized_extent
             );
 
+            // Only add the tile if a symmetry of it doesn't already exist.
             if tiles.contains(&transformed_tile) {
                 add_tile = None;
                 break;
