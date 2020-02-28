@@ -89,18 +89,33 @@ where
 
     let mut tiles: HashSet<Tile<T, _>> = HashSet::new();
 
-    for symmetry in Z_STATIONARY_OCTAHEDRAL_GROUP.iter() {
-        let transform = Transform { matrix: symmetry.clone() };
+    for p in index_extent {
+        let tile_min = p * *tile_size;
+        let tile_extent = lat::Extent::from_min_and_local_supremum(tile_min, *tile_size);
+        let tile_lattice = input_lattice.copy_extent_into_new_lattice(&tile_extent);
 
-        let mut transformed_input_lattice = input_lattice.apply_octahedral_transform(&transform);
-        // Keep the indexing the same for all symmetries.
-        transformed_input_lattice.set_minimum(&[0, 0, 0].into());
+        // Identify any symmetric configurations of a tile.
+        let mut add_tile = None;
+        for symmetry in Z_STATIONARY_OCTAHEDRAL_GROUP.iter() {
+            let transform = Transform { matrix: symmetry.clone() };
+            let mut transformed_tile_lattice = tile_lattice.apply_octahedral_transform(&transform);
+            transformed_tile_lattice.set_minimum(&[0, 0, 0].into()); // normalize
+            let normalized_extent = lat::Extent::from_min_and_local_supremum(
+                [0, 0, 0].into(), *tile_size
+            );
+            let transformed_tile = Tile::get_from_lattice(
+                &transformed_tile_lattice, &normalized_extent
+            );
 
-        for p in index_extent {
-            // Identify the tile with the serialized values.
-            let tile_min = p * *tile_size;
-            let tile_extent = lat::Extent::from_min_and_local_supremum(tile_min, *tile_size);
-            let tile = Tile::get_from_lattice(&transformed_input_lattice, &tile_extent);
+            if tiles.contains(&transformed_tile) {
+                add_tile = None;
+                break;
+            }
+
+            add_tile = Some(transformed_tile);
+        }
+
+        if let Some(tile) = add_tile {
             tiles.insert(tile);
         }
     }
