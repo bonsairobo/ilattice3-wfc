@@ -3,7 +3,7 @@ use ilattice3_wfc::*;
 use dot_vox::DotVoxData;
 use flexi_logger::{default_format, Logger};
 use ilattice3 as lat;
-use ilattice3::{Lattice, PeriodicYLevelsIndexer, VoxColor};
+use ilattice3::{Lattice, PeriodicYLevelsIndexer, VoxColor, EMPTY_VOX_COLOR};
 use image::{Rgba, RgbaImage};
 use indicatif::ProgressBar;
 use std::fs::File;
@@ -48,7 +48,7 @@ struct Args {
     #[structopt(long, default_value = "1")]
     skip_frames: usize,
 
-    /// Path where the pattern palette image should be saved. Only supported for 2D images.
+    /// Path where the pattern palette image/vox should be saved.
     #[structopt(long, parse(from_os_str))]
     palette: Option<PathBuf>,
 
@@ -154,10 +154,6 @@ fn process_args(args: &Args) -> Result<ProcessedInput<PeriodicYLevelsIndexer>, C
         .extension()
         .expect("Input file has no extention");
     let (input_lattice, offsets) = if extension == "vox" {
-        assert!(
-            args.palette.is_none(),
-            "Palette image only supported for 2D images"
-        );
         let input_vox =
             dot_vox::load(args.input_path.to_str().unwrap()).expect("Failed to load VOX file");
         let model_index = 0;
@@ -243,7 +239,9 @@ fn generate_image(
 
     if let Some(palette_path) = args.palette {
         // Save the palette image for debugging.
-        let palette_lattice = make_palette_lattice(&pattern_tiles);
+        let palette_lattice = make_palette_lattice(
+            &pattern_tiles.clone().into(), Rgba([0; 4]), 512
+        );
         let palette_img: RgbaImage = (&palette_lattice).into();
         palette_img.save(palette_path)?;
     }
@@ -293,6 +291,14 @@ fn generate_vox(
         input_lattice.get_extent().get_local_supremum()
     );
 
+    if let Some(palette_path) = args.palette {
+        let tiles = find_unique_tiles(&input_lattice, &tile_size);
+        println!("Found {} unique tiles", tiles.tiles.len());
+        // Save the palette vox for debugging.
+        let palette_lattice = make_palette_lattice(&tiles, EMPTY_VOX_COLOR, std::u8::MAX as usize);
+        save_vox(&palette_path, palette_lattice, &color_palette)?;
+    }
+
     let (sampler, constraints, pattern_tiles) =
         process_patterns_in_lattice(&input_lattice, &tile_size, &pattern_shape);
     println!(
@@ -309,14 +315,23 @@ fn generate_vox(
         running,
     ) {
         let colors = color_final_patterns_vox(&result, &pattern_tiles);
-        let mut vox_data: DotVoxData = colors.into();
-        vox_data.palette = color_palette.colors;
-        println!("Writing {:?}", args.output_path);
-        let mut out_file = File::create(args.output_path)?;
-        vox_data.write_vox(&mut out_file)?;
+        save_vox(&args.output_path, colors, &color_palette)?;
     }
 
     Ok(())
+}
+
+fn save_vox<I: lat::Indexer>(
+    path: &PathBuf,
+    colors: Lattice<VoxColor, I>,
+    color_palette: &VoxColorPalette
+) -> Result<(), std::io::Error> {
+    let mut vox_data: DotVoxData = colors.into();
+    vox_data.palette = color_palette.colors.clone();
+    println!("Writing {:?}", path);
+    let mut out_file = File::create(path)?;
+
+    vox_data.write_vox(&mut out_file)
 }
 
 fn generate<F>(

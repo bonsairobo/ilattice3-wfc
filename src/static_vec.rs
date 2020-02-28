@@ -62,6 +62,10 @@ impl<I: Id, T> StaticVec<I, T> {
         &self.data
     }
 
+    pub fn into_raw(self) -> Vec<T> {
+        self.data
+    }
+
     pub fn push(&mut self, datum: T) -> I {
         self.data.push(datum);
 

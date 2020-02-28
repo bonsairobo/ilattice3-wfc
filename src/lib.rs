@@ -23,8 +23,8 @@ pub use crate::image::{
 pub use generate::{Generator, UpdateResult, NUM_SEED_BYTES};
 pub use offset::{edge_2d_offsets, face_3d_offsets, OffsetGroup};
 pub use pattern::{
-    process_patterns_in_lattice, PatternConstraints, PatternId, PatternMap, PatternSampler,
-    PatternSet, PatternShape,
+    find_unique_tiles, process_patterns_in_lattice, PatternConstraints, PatternId, PatternMap,
+    PatternSampler, PatternSet, PatternShape,
 };
 
 use ::image::ImageError;

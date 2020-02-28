@@ -5,10 +5,12 @@ use crate::{
 
 use hibitset::{BitSet, BitSetLike};
 use ilattice3 as lat;
-use ilattice3::{Indexer, Lattice, PeriodicYLevelsIndexer, Tile};
+use ilattice3::{
+    Indexer, Lattice, PeriodicYLevelsIndexer, Tile, Transform, Z_STATIONARY_OCTAHEDRAL_GROUP
+};
 use rand::prelude::*;
 use rand_distr::weighted::WeightedIndex;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 pub struct PatternShape {
@@ -73,6 +75,39 @@ impl Id for PatternId {}
 
 const EMPTY_PATTERN_ID: PatternId = PatternId(std::u16::MAX);
 
+pub fn find_unique_tiles<T>(
+    input_lattice: &Lattice<T, PeriodicYLevelsIndexer>,
+    tile_size: &lat::Point,
+) -> TileSet<T, PeriodicYLevelsIndexer>
+where
+    T: Clone + Copy + std::fmt::Debug + Eq + Hash,
+{
+    let input_extent = input_lattice.get_extent();
+    let index_extent = lat::Extent::from_min_and_local_supremum(
+        [0, 0, 0].into(), input_extent.get_local_supremum().div_ceil(tile_size)
+    );
+
+    let mut tiles: HashSet<Tile<T, _>> = HashSet::new();
+
+    for symmetry in Z_STATIONARY_OCTAHEDRAL_GROUP.iter() {
+        let transform = Transform { matrix: symmetry.clone() };
+
+        let mut transformed_input_lattice = input_lattice.apply_octahedral_transform(&transform);
+        // Keep the indexing the same for all symmetries.
+        transformed_input_lattice.set_minimum(&[0, 0, 0].into());
+
+        for p in index_extent {
+            // Identify the tile with the serialized values.
+            let tile_min = p * *tile_size;
+            let tile_extent = lat::Extent::from_min_and_local_supremum(tile_min, *tile_size);
+            let tile = Tile::get_from_lattice(&transformed_input_lattice, &tile_extent);
+            tiles.insert(tile);
+        }
+    }
+
+    TileSet { tiles: tiles.into_iter().collect(), tile_size: *tile_size }
+}
+
 /// For each unique (up to translation) sublattice of `input_lattice`, create a `PatternId`, count
 /// the occurences of the pattern, and record the set of patterns that overlap with that pattern at
 /// each possible offset.
@@ -80,7 +115,7 @@ pub fn process_patterns_in_lattice<T>(
     input_lattice: &Lattice<T, PeriodicYLevelsIndexer>,
     tile_size: &lat::Point,
     pattern_shape: &PatternShape,
-) -> (PatternSampler, PatternConstraints, TileSet<T, PeriodicYLevelsIndexer>)
+) -> (PatternSampler, PatternConstraints, PatternTileSet<T, PeriodicYLevelsIndexer>)
 where
     T: Clone + Copy + std::fmt::Debug + Eq + Hash,
 {
@@ -160,12 +195,40 @@ where
     (
         PatternSampler::new(pattern_weights),
         constraints,
-        TileSet { tiles: PatternMap::new(pattern_min_tiles), tile_size: *tile_size, }
+        PatternTileSet { tiles: PatternMap::new(pattern_min_tiles), tile_size: *tile_size, }
     )
 }
 
 #[derive(Clone)]
 pub struct TileSet<T, I> {
+    pub tiles: Vec<Tile<T, I>>,
+    pub tile_size: lat::Point,
+}
+
+impl<T, I> From<TileSet<T, I>> for PatternTileSet<T, I> {
+    fn from(other: TileSet<T, I>) -> Self {
+        let TileSet { tiles, tile_size } = other;
+
+        PatternTileSet {
+            tiles: PatternMap::new(tiles),
+            tile_size,
+        }
+    }
+}
+
+impl<T, I> From<PatternTileSet<T, I>> for TileSet<T, I> {
+    fn from(other: PatternTileSet<T, I>) -> Self {
+        let PatternTileSet { tiles, tile_size } = other;
+
+        TileSet {
+            tiles: tiles.into_raw(),
+            tile_size,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct PatternTileSet<T, I> {
     pub tiles: PatternMap<Tile<T, I>>,
     pub tile_size: lat::Point,
 }
