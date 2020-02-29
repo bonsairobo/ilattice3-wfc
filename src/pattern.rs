@@ -76,12 +76,13 @@ impl Id for PatternId {}
 
 const EMPTY_PATTERN_ID: PatternId = PatternId(std::u16::MAX);
 
-pub fn find_unique_tiles<T>(
-    input_lattice: &Lattice<T, PeriodicYLevelsIndexer>,
+pub fn find_unique_tiles<T, I>(
+    input_lattice: &Lattice<T, I>,
     tile_size: &lat::Point,
-) -> TileSet<T, PeriodicYLevelsIndexer>
+) -> TileSet<T, I>
 where
     T: Clone + Copy + std::fmt::Debug + Eq + Hash,
+    I: Eq + Hash + lat::Indexer,
 {
     let input_extent = input_lattice.get_extent();
     let index_extent = lat::Extent::from_min_and_local_supremum(
