@@ -3,7 +3,7 @@ use ilattice3_wfc::*;
 use dot_vox::DotVoxData;
 use flexi_logger::{default_format, Logger};
 use ilattice3 as lat;
-use ilattice3::{Lattice, PeriodicYLevelsIndexer, VoxColor, EMPTY_VOX_COLOR};
+use ilattice3::{GetExtent, Lattice, PeriodicYLevelsIndexer, VoxColor, EMPTY_VOX_COLOR};
 use image::{Rgba, RgbaImage};
 use indicatif::ProgressBar;
 use std::fs::File;
@@ -239,9 +239,8 @@ fn generate_image(
 
     if let Some(palette_path) = args.palette {
         // Save the palette image for debugging.
-        let palette_lattice = make_palette_lattice(
-            &pattern_tiles.clone().into(), Rgba([0; 4]), 512
-        );
+        let palette_lattice =
+            make_palette_lattice(&pattern_tiles.clone().into(), Rgba([0; 4]), 512);
         let palette_img: RgbaImage = (&palette_lattice).into();
         palette_img.save(palette_path)?;
     }
@@ -324,7 +323,7 @@ fn generate_vox(
 fn save_vox<I: lat::Indexer>(
     path: &PathBuf,
     colors: Lattice<VoxColor, I>,
-    color_palette: &VoxColorPalette
+    color_palette: &VoxColorPalette,
 ) -> Result<(), std::io::Error> {
     let mut vox_data: DotVoxData = colors.into();
     vox_data.palette = color_palette.colors.clone();

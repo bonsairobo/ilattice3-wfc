@@ -6,7 +6,8 @@ use crate::{
 use hibitset::{BitSet, BitSetLike};
 use ilattice3 as lat;
 use ilattice3::{
-    Indexer, Lattice, PeriodicYLevelsIndexer, Tile, Transform, Z_STATIONARY_OCTAHEDRAL_GROUP
+    GetExtent, GetWorld, Indexer, Lattice, PeriodicYLevelsIndexer, Tile, Transform,
+    Z_STATIONARY_OCTAHEDRAL_GROUP,
 };
 use rand::prelude::*;
 use rand_distr::weighted::WeightedIndex;
@@ -86,7 +87,8 @@ where
 {
     let input_extent = input_lattice.get_extent();
     let index_extent = lat::Extent::from_min_and_local_supremum(
-        [0, 0, 0].into(), input_extent.get_local_supremum().div_ceil(tile_size)
+        [0, 0, 0].into(),
+        input_extent.get_local_supremum().div_ceil(tile_size),
     );
 
     let mut tiles: HashSet<Tile<T, _>> = HashSet::new();
@@ -99,15 +101,15 @@ where
         // Identify any symmetric configurations of a tile.
         let mut add_tile = None;
         for symmetry in Z_STATIONARY_OCTAHEDRAL_GROUP.iter() {
-            let transform = Transform { matrix: symmetry.clone() };
+            let transform = Transform {
+                matrix: symmetry.clone(),
+            };
             let mut transformed_tile_lattice = tile_lattice.apply_octahedral_transform(&transform);
             transformed_tile_lattice.set_minimum(&[0, 0, 0].into()); // normalize
-            let normalized_extent = lat::Extent::from_min_and_local_supremum(
-                [0, 0, 0].into(), *tile_size
-            );
-            let transformed_tile = Tile::get_from_lattice(
-                &transformed_tile_lattice, &normalized_extent
-            );
+            let normalized_extent =
+                lat::Extent::from_min_and_local_supremum([0, 0, 0].into(), *tile_size);
+            let transformed_tile =
+                Tile::get_from_lattice(&transformed_tile_lattice, &normalized_extent);
 
             // Only add the tile if a symmetry of it doesn't already exist.
             if tiles.contains(&transformed_tile) {
@@ -123,7 +125,10 @@ where
         }
     }
 
-    TileSet { tiles: tiles.into_iter().collect(), tile_size: *tile_size }
+    TileSet {
+        tiles: tiles.into_iter().collect(),
+        tile_size: *tile_size,
+    }
 }
 
 /// For each unique (up to translation) sublattice of `input_lattice`, create a `PatternId`, count
@@ -133,7 +138,11 @@ pub fn process_patterns_in_lattice<T>(
     input_lattice: &Lattice<T, PeriodicYLevelsIndexer>,
     tile_size: &lat::Point,
     pattern_shape: &PatternShape,
-) -> (PatternSampler, PatternConstraints, PatternTileSet<T, PeriodicYLevelsIndexer>)
+) -> (
+    PatternSampler,
+    PatternConstraints,
+    PatternTileSet<T, PeriodicYLevelsIndexer>,
+)
 where
     T: Clone + Copy + std::fmt::Debug + Eq + Hash,
 {
@@ -151,14 +160,12 @@ where
 
     let mut constraints = PatternConstraints::new(pattern_shape.offset_group.clone());
 
-    let pattern_lattice_extent = lat::Extent::from_min_and_local_supremum(
-        [0, 0, 0].into(), pattern_lattice_size
-    );
+    let pattern_lattice_extent =
+        lat::Extent::from_min_and_local_supremum([0, 0, 0].into(), pattern_lattice_size);
 
     // Map pattern center to pattern ID.
-    let mut pattern_lattice = Lattice::<_, PeriodicYLevelsIndexer>::fill(
-        pattern_lattice_extent, EMPTY_PATTERN_ID
-    );
+    let mut pattern_lattice =
+        Lattice::<_, PeriodicYLevelsIndexer>::fill(pattern_lattice_extent, EMPTY_PATTERN_ID);
 
     // Index the patterns.
     for pattern_point in pattern_lattice_extent.into_iter() {
@@ -213,7 +220,10 @@ where
     (
         PatternSampler::new(pattern_weights),
         constraints,
-        PatternTileSet { tiles: PatternMap::new(pattern_min_tiles), tile_size: *tile_size, }
+        PatternTileSet {
+            tiles: PatternMap::new(pattern_min_tiles),
+            tile_size: *tile_size,
+        },
     )
 }
 
@@ -266,7 +276,10 @@ impl PatternConstraints {
     }
 
     pub fn add_pattern(&mut self) {
-        self.constraints.push(OffsetMap::fill(BitSet::new(), self.offset_group.num_offsets()));
+        self.constraints.push(OffsetMap::fill(
+            BitSet::new(),
+            self.offset_group.num_offsets(),
+        ));
     }
 
     pub fn get_offset_group(&self) -> &OffsetGroup {

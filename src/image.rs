@@ -6,7 +6,9 @@ use crate::{
 };
 
 use ilattice3 as lat;
-use ilattice3::{Lattice, StatelessIndexer, Tile, VoxColor, EMPTY_VOX_COLOR};
+use ilattice3::{
+    copy_extent, GetExtent, GetWorld, Lattice, StatelessIndexer, Tile, VoxColor, EMPTY_VOX_COLOR,
+};
 use image::{self, gif, Delay, Frame, Rgba, RgbaImage};
 use std::fs::File;
 use std::path::PathBuf;
@@ -18,9 +20,8 @@ pub fn make_palette_lattice<T: Clone, I: StatelessIndexer>(
 ) -> Lattice<T, I> {
     let max_dim = max_dim as i32;
     let tile_size = tiles.tile_size;
-    let palette_extent = lat::Extent::from_min_and_local_supremum(
-        [0, 0, 0].into(), [max_dim; 3].into(),
-    );
+    let palette_extent =
+        lat::Extent::from_min_and_local_supremum([0, 0, 0].into(), [max_dim; 3].into());
     let mut palette_lattice = Lattice::fill(palette_extent, default);
     let mut next_min = [0, 0, 0].into();
     for tile in tiles.tiles.iter() {
@@ -37,7 +38,8 @@ pub fn make_palette_lattice<T: Clone, I: StatelessIndexer>(
         }
         next_min.x += tile_size.x + 1;
 
-        tile.clone().put_in_lattice(&dst_extent, &mut palette_lattice);
+        tile.clone()
+            .put_in_lattice(&dst_extent, &mut palette_lattice);
     }
 
     palette_lattice
@@ -63,7 +65,7 @@ pub fn color_superposition<I: StatelessIndexer>(
             for pattern in patterns.iter() {
                 num_patterns += 1;
                 let tile: Tile<_, _> = tiles.get(pattern).clone();
-                let tile = tile.put_in_extent(I::new(), output_extent);
+                let tile = tile.put_in_extent(I::default(), output_extent);
                 let Rgba(p_color) = *tile.get_world(&p);
                 for i in 0..4 {
                     color_sum[i] += p_color[i] as f32;
@@ -100,8 +102,8 @@ where
         let tile = tiles
             .get(*pattern)
             .clone()
-            .put_in_extent(I::new(), output_extent);
-        Lattice::copy_extent(&tile, &mut color_lattice, &output_extent);
+            .put_in_extent(I::default(), output_extent);
+        copy_extent(&tile, &mut color_lattice, &output_extent);
     }
 
     color_lattice

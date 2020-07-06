@@ -6,7 +6,7 @@ use crate::{
 };
 
 use ilattice3 as lat;
-use ilattice3::Lattice;
+use ilattice3::{GetExtent, GetWorld, GetWorldMut, Lattice};
 use log::{debug, info, warn};
 use rand::prelude::*;
 
