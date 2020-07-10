@@ -6,7 +6,7 @@ use crate::{
 use hibitset::{BitSet, BitSetLike};
 use ilattice3 as lat;
 use ilattice3::{
-    GetExtent, GetWorld, Indexer, Lattice, PeriodicYLevelsIndexer, Tile, Transform,
+    prelude::*, Indexer, PeriodicYLevelsIndexer, Tile, Transform, VecLatticeMap,
     Z_STATIONARY_OCTAHEDRAL_GROUP,
 };
 use rand::prelude::*;
@@ -78,7 +78,7 @@ impl Id for PatternId {}
 const EMPTY_PATTERN_ID: PatternId = PatternId(std::u16::MAX);
 
 pub fn find_unique_tiles<T, I>(
-    input_lattice: &Lattice<T, I>,
+    input_lattice: &VecLatticeMap<T, I>,
     tile_size: &lat::Point,
 ) -> TileSet<T, I>
 where
@@ -135,7 +135,7 @@ where
 /// the occurences of the pattern, and record the set of patterns that overlap with that pattern at
 /// each possible offset.
 pub fn process_patterns_in_lattice<T>(
-    input_lattice: &Lattice<T, PeriodicYLevelsIndexer>,
+    input_lattice: &VecLatticeMap<T, PeriodicYLevelsIndexer>,
     tile_size: &lat::Point,
     pattern_shape: &PatternShape,
 ) -> (
@@ -165,7 +165,7 @@ where
 
     // Map pattern center to pattern ID.
     let mut pattern_lattice =
-        Lattice::<_, PeriodicYLevelsIndexer>::fill(pattern_lattice_extent, EMPTY_PATTERN_ID);
+        VecLatticeMap::<_, PeriodicYLevelsIndexer>::fill(pattern_lattice_extent, EMPTY_PATTERN_ID);
 
     // Index the patterns.
     for pattern_point in pattern_lattice_extent.into_iter() {
@@ -194,16 +194,16 @@ where
 
             this_pattern_id
         });
-        *pattern_lattice.get_mut_local(&pattern_point) = *pattern_id;
+        *pattern_lattice.get_local_ref_mut(&pattern_point) = *pattern_id;
     }
 
     // Set the constraints and count pattern occurences.
     for pattern_point in pattern_lattice_extent.into_iter() {
-        let pattern = *pattern_lattice.get_local(&pattern_point);
+        let pattern = pattern_lattice.get_local(&pattern_point);
         debug_assert!(pattern != EMPTY_PATTERN_ID);
         for (_, offset) in pattern_shape.offset_group.iter() {
             let offset_point = pattern_point + *offset;
-            let offset_pattern = *pattern_lattice.get_local(&offset_point);
+            let offset_pattern = pattern_lattice.get_local(&offset_point);
             debug_assert!(offset_pattern != EMPTY_PATTERN_ID);
 
             constraints.add_compatible_patterns(&offset, pattern, offset_pattern);
@@ -364,7 +364,10 @@ impl PatternConstraints {
         pattern_supports
     }
 
-    pub fn assignment_is_valid<I: Indexer>(&self, assignment: &Lattice<PatternId, I>) -> bool {
+    pub fn assignment_is_valid<I: Indexer>(
+        &self,
+        assignment: &VecLatticeMap<PatternId, I>,
+    ) -> bool {
         let extent = assignment.get_extent();
         for p in extent {
             let pattern = assignment.get_world(&p);
@@ -374,7 +377,7 @@ impl PatternConstraints {
                     continue;
                 }
                 let offset_pattern = assignment.get_world(&offset_p);
-                if !self.are_compatible(*pattern, *offset_pattern, offset_id) {
+                if !self.are_compatible(pattern, offset_pattern, offset_id) {
                     return false;
                 }
             }

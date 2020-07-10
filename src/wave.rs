@@ -6,7 +6,7 @@ use crate::{
 };
 
 use ilattice3 as lat;
-use ilattice3::{GetExtent, GetWorld, GetWorldMut, Lattice};
+use ilattice3::{prelude::*, VecLatticeMap};
 use log::{debug, info, warn};
 use rand::prelude::*;
 
@@ -17,14 +17,14 @@ pub struct Wave {
     collapsed_count: usize,
 
     /// The set of possible patterns at each slot.
-    slots: Lattice<PatternSet>,
+    slots: VecLatticeMap<PatternSet>,
 
     /// The current entropy of each slot. It's faster to store this than recompute every frame.
-    entropy_cache: Lattice<SlotEntropyCache>,
+    entropy_cache: VecLatticeMap<SlotEntropyCache>,
 
     /// Counts each pattern's remaining support at each offset. Once a given pattern P, for any
     /// offset, has no supporting patterns at that offset, P is no longer possible.
-    pattern_supports: Lattice<PatternMap<PatternSupport>>,
+    pattern_supports: VecLatticeMap<PatternMap<PatternSupport>>,
 
     /// Container of patterns remove from slots. Currently used as a stack, but could eventually be
     /// used as a log for backtracking.
@@ -41,14 +41,14 @@ impl Wave {
         let all_possible = PatternSet::all(constraints.num_patterns());
 
         let extent = lat::Extent::from_min_and_world_supremum([0, 0, 0].into(), output_size);
-        let slots = Lattice::fill(extent, all_possible.clone());
+        let slots = VecLatticeMap::fill(extent, all_possible.clone());
 
         let initial_entropy = slot_entropy(sampler, &all_possible);
         debug!("Initial entropy = {:?}", initial_entropy);
-        let entropy_cache = Lattice::fill(extent, initial_entropy);
+        let entropy_cache = VecLatticeMap::fill(extent, initial_entropy);
 
         let initial_supports = constraints.get_initial_support();
-        let pattern_supports = Lattice::fill(extent, initial_supports);
+        let pattern_supports = VecLatticeMap::fill(extent, initial_supports);
 
         Wave {
             slots,
@@ -77,7 +77,7 @@ impl Wave {
         (0..self.num_slots())
             .map(|linear_index| {
                 let noise: f32 = rng.gen();
-                let cache = *self.entropy_cache.get_linear(linear_index);
+                let cache = *self.entropy_cache.get_linear_ref(linear_index);
                 let entropy = cache.entropy + 0.1 * noise;
 
                 (linear_index, entropy)
@@ -185,7 +185,7 @@ impl Wave {
         slot: &lat::Point,
         pattern: PatternId,
     ) -> bool {
-        let possible_slot_patterns = self.slots.get_mut_world(slot);
+        let possible_slot_patterns = self.slots.get_world_ref_mut(slot);
         possible_slot_patterns.remove(pattern);
 
         let num_remaining_patterns_in_slot = possible_slot_patterns.len();
@@ -203,7 +203,10 @@ impl Wave {
 
         // Even though this pattern is being removed, it may still have support at some offsets.
         // Just clear that support now so we don't trigger another removal.
-        let support = self.pattern_supports.get_mut_world(slot).get_mut(pattern);
+        let support = self
+            .pattern_supports
+            .get_world_ref_mut(slot)
+            .get_mut(pattern);
         support.clear();
 
         self.removal_stack
@@ -220,7 +223,7 @@ impl Wave {
         assign_pattern: PatternId,
     ) {
         let remove_patterns: Vec<PatternId> = {
-            let set = self.slots.get_mut_world(slot);
+            let set = self.slots.get_world_ref_mut(slot);
 
             set.iter().filter(|p| *p != assign_pattern).collect()
         };
@@ -235,7 +238,7 @@ impl Wave {
         slot: &lat::Point,
         remove_pattern: PatternId,
     ) {
-        let cache = self.entropy_cache.get_mut_world(slot);
+        let cache = self.entropy_cache.get_world_ref_mut(slot);
         let weight = sampler.get_weight(remove_pattern) as f32;
         cache.sum_weights -= weight;
         cache.sum_weights_log_weights -= weight * weight.log2();
@@ -243,24 +246,24 @@ impl Wave {
     }
 
     fn set_max_entropy(&mut self, slot: &lat::Point) {
-        let cache = self.entropy_cache.get_mut_world(slot);
+        let cache = self.entropy_cache.get_world_ref_mut(slot);
         let inf = std::f32::INFINITY;
         cache.sum_weights = inf;
         cache.sum_weights_log_weights = inf;
         cache.entropy = inf;
     }
 
-    pub fn get_slots(&self) -> &Lattice<PatternSet> {
+    pub fn get_slots(&self) -> &VecLatticeMap<PatternSet> {
         &self.slots
     }
 
     fn get_slot(&self, slot: &lat::Point) -> &PatternSet {
-        self.slots.get_world(slot)
+        self.slots.get_world_ref(slot)
     }
 
     fn remove_support(&mut self, slot: &lat::Point, pattern: PatternId, offset: OffsetId) -> bool {
         self.pattern_supports
-            .get_mut_world(slot)
+            .get_world_ref_mut(slot)
             .get_mut(pattern)
             .remove(offset)
     }

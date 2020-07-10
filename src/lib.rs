@@ -28,19 +28,19 @@ pub use pattern::{
 };
 
 use ::image::ImageError;
-use ilattice3::Lattice;
+use ilattice3::VecLatticeMap;
 use std::error;
 use std::fmt;
 use std::io;
 
 pub trait FrameConsumer {
-    fn use_frame(&mut self, frame: &Lattice<PatternSet>);
+    fn use_frame(&mut self, frame: &VecLatticeMap<PatternSet>);
 }
 
 pub struct NilFrameConsumer;
 
 impl FrameConsumer for NilFrameConsumer {
-    fn use_frame(&mut self, _frame: &Lattice<PatternSet>) {}
+    fn use_frame(&mut self, _frame: &VecLatticeMap<PatternSet>) {}
 }
 
 #[derive(Debug)]

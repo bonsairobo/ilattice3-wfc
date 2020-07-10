@@ -3,7 +3,7 @@ use ilattice3_wfc::*;
 use dot_vox::DotVoxData;
 use flexi_logger::{default_format, Logger};
 use ilattice3 as lat;
-use ilattice3::{GetExtent, Lattice, PeriodicYLevelsIndexer, VoxColor, EMPTY_VOX_COLOR};
+use ilattice3::{GetExtent, PeriodicYLevelsIndexer, VecLatticeMap, VoxColor, EMPTY_VOX_COLOR};
 use image::{Rgba, RgbaImage};
 use indicatif::ProgressBar;
 use std::fs::File;
@@ -115,9 +115,9 @@ struct ProcessedInput<I> {
 
 enum InputLattice<I> {
     // Vox lattice stores indices into a color palette.
-    Vox(Lattice<VoxColor, I>, VoxColorPalette),
+    Vox(VecLatticeMap<VoxColor, I>, VoxColorPalette),
     // Images just store the colors directly.
-    Image(Lattice<Rgba<u8>, I>),
+    Image(VecLatticeMap<Rgba<u8>, I>),
 }
 
 struct VoxColorPalette {
@@ -160,7 +160,7 @@ fn process_args(args: &Args) -> Result<ProcessedInput<PeriodicYLevelsIndexer>, C
 
         (
             InputLattice::Vox(
-                Lattice::from_vox_with_indexer(indexer, &input_vox, model_index),
+                VecLatticeMap::from_vox_with_indexer(indexer, &input_vox, model_index),
                 VoxColorPalette {
                     colors: input_vox.palette,
                 },
@@ -221,7 +221,7 @@ fn generate_image(
     seed: [u8; 16],
     tile_size: lat::Point,
     pattern_shape: PatternShape,
-    input_lattice: Lattice<Rgba<u8>, PeriodicYLevelsIndexer>,
+    input_lattice: VecLatticeMap<Rgba<u8>, PeriodicYLevelsIndexer>,
     output_size: lat::Point,
     running: Arc<AtomicBool>,
 ) -> Result<(), CliError> {
@@ -280,7 +280,7 @@ fn generate_vox(
     seed: [u8; 16],
     tile_size: lat::Point,
     pattern_shape: PatternShape,
-    input_lattice: Lattice<VoxColor, PeriodicYLevelsIndexer>,
+    input_lattice: VecLatticeMap<VoxColor, PeriodicYLevelsIndexer>,
     output_size: lat::Point,
     color_palette: VoxColorPalette,
     running: Arc<AtomicBool>,
@@ -322,7 +322,7 @@ fn generate_vox(
 
 fn save_vox<I: lat::Indexer>(
     path: &PathBuf,
-    colors: Lattice<VoxColor, I>,
+    colors: VecLatticeMap<VoxColor, I>,
     color_palette: &VoxColorPalette,
 ) -> Result<(), std::io::Error> {
     let mut vox_data: DotVoxData = colors.into();
@@ -340,7 +340,7 @@ fn generate<F>(
     output_size: lat::Point,
     frame_consumer: &mut Option<F>,
     running: Arc<AtomicBool>,
-) -> Option<Lattice<PatternId>>
+) -> Option<VecLatticeMap<PatternId>>
 where
     F: FrameConsumer,
 {

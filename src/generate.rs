@@ -4,7 +4,7 @@ use crate::{
 };
 
 use ilattice3 as lat;
-use ilattice3::Lattice;
+use ilattice3::VecLatticeMap;
 use log::debug;
 use rand::{prelude::*, rngs::SmallRng};
 
@@ -29,12 +29,12 @@ impl Generator {
         }
     }
 
-    pub fn get_wave_lattice(&self) -> &Lattice<PatternSet> {
+    pub fn get_wave_lattice(&self) -> &VecLatticeMap<PatternSet> {
         self.wave.get_slots()
     }
 
     /// Warning: undefined behavior if called before `update` returns `Success`.
-    pub fn result(&self) -> Lattice<PatternId> {
+    pub fn result(&self) -> VecLatticeMap<PatternId> {
         self.wave
             .get_slots()
             .map(|possible_patterns: &PatternSet| possible_patterns.iter().next().unwrap())
