@@ -96,7 +96,7 @@ where
     for p in index_extent {
         let tile_min = p * *tile_size;
         let tile_extent = lat::Extent::from_min_and_local_supremum(tile_min, *tile_size);
-        let tile_lattice = input_lattice.copy_extent_into_new_lattice(&tile_extent);
+        let tile_lattice = input_lattice.copy_extent_into_new_map(&tile_extent);
 
         // Identify any symmetric configurations of a tile.
         let mut add_tile = None;
@@ -109,7 +109,7 @@ where
             let normalized_extent =
                 lat::Extent::from_min_and_local_supremum([0, 0, 0].into(), *tile_size);
             let transformed_tile =
-                Tile::get_from_lattice(&transformed_tile_lattice, &normalized_extent);
+                Tile::get_from_map(&transformed_tile_lattice, &normalized_extent);
 
             // Only add the tile if a symmetry of it doesn't already exist.
             if tiles.contains(&transformed_tile) {
@@ -174,8 +174,8 @@ where
         let pattern_extent = lat::Extent::from_min_and_local_supremum(pattern_min, pattern_size);
         let tile_extent = lat::Extent::from_min_and_local_supremum(pattern_min, *tile_size);
 
-        let pattern = Tile::get_from_lattice(input_lattice, &pattern_extent);
-        let pattern_min_tile = Tile::get_from_lattice(input_lattice, &tile_extent);
+        let pattern = Tile::get_from_map(input_lattice, &pattern_extent);
+        let pattern_min_tile = Tile::get_from_map(input_lattice, &tile_extent);
 
         let pattern_id = patterns.entry(pattern).or_insert_with(|| {
             let this_pattern_id = PatternId(num_patterns);

@@ -38,8 +38,7 @@ pub fn make_palette_lattice<T: Clone, I: StatelessIndexer>(
         }
         next_min.x += tile_size.x + 1;
 
-        tile.clone()
-            .put_in_lattice(&dst_extent, &mut palette_lattice);
+        tile.clone().put_in_map(&dst_extent, &mut palette_lattice);
     }
 
     palette_lattice
@@ -55,7 +54,7 @@ pub fn color_superposition<I: StatelessIndexer>(
     let full_extent = lat::Extent::from_min_and_local_supremum([0, 0, 0].into(), full_size);
 
     let mut color_lattice = VecLatticeMap::fill(full_extent, Rgba([0; 4]));
-    for pattern_p in &pattern_lattice.get_extent() {
+    for pattern_p in pattern_lattice.get_extent() {
         let output_extent =
             lat::Extent::from_min_and_local_supremum(pattern_p * *tile_size, *tile_size);
         for p in output_extent {
@@ -96,7 +95,7 @@ where
     let full_extent = lat::Extent::from_min_and_local_supremum([0, 0, 0].into(), full_size);
 
     let mut color_lattice = VecLatticeMap::fill(full_extent, fill_value);
-    for p in &pattern_lattice.get_extent() {
+    for p in pattern_lattice.get_extent() {
         let output_extent = lat::Extent::from_min_and_local_supremum(p * *tile_size, *tile_size);
         let pattern = pattern_lattice.get_world(&p);
         let tile = tiles
