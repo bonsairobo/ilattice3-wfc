@@ -6,14 +6,12 @@ use crate::{
 };
 
 use ilattice3 as lat;
-use ilattice3::{
-    copy_extent, prelude::*, StatelessIndexer, Tile, VecLatticeMap, VoxColor, EMPTY_VOX_COLOR,
-};
+use ilattice3::{copy_extent, prelude::*, Indexer, Tile, VecLatticeMap, VoxColor, EMPTY_VOX_COLOR};
 use image::{self, gif, Delay, Frame, Rgba, RgbaImage};
 use std::fs::File;
 use std::path::PathBuf;
 
-pub fn make_palette_lattice<T: Clone, I: StatelessIndexer>(
+pub fn make_palette_lattice<T: Clone, I: Clone + Indexer>(
     tiles: &TileSet<T, I>,
     default: T,
     max_dim: usize,
@@ -44,7 +42,7 @@ pub fn make_palette_lattice<T: Clone, I: StatelessIndexer>(
     palette_lattice
 }
 
-pub fn color_superposition<I: StatelessIndexer>(
+pub fn color_superposition<I: Clone + Indexer>(
     pattern_lattice: &VecLatticeMap<PatternSet>,
     tiles: &PatternTileSet<Rgba<u8>, I>,
 ) -> VecLatticeMap<Rgba<u8>> {
@@ -64,7 +62,7 @@ pub fn color_superposition<I: StatelessIndexer>(
             for pattern in patterns.iter() {
                 num_patterns += 1;
                 let tile: Tile<_, _> = tiles.get(pattern).clone();
-                let tile = tile.put_in_extent(I::default(), output_extent);
+                let tile = tile.put_in_extent(output_extent);
                 let Rgba(p_color) = tile.get_world(&p);
                 for i in 0..4 {
                     color_sum[i] += p_color[i] as f32;
@@ -81,7 +79,7 @@ pub fn color_superposition<I: StatelessIndexer>(
     color_lattice
 }
 
-fn color_final_patterns<C, I: StatelessIndexer>(
+fn color_final_patterns<C, I: Clone + Indexer>(
     pattern_lattice: &VecLatticeMap<PatternId>,
     tiles: &PatternTileSet<C, I>,
     fill_value: C,
@@ -98,24 +96,21 @@ where
     for p in pattern_lattice.get_extent() {
         let output_extent = lat::Extent::from_min_and_local_supremum(p * *tile_size, *tile_size);
         let pattern = pattern_lattice.get_world(&p);
-        let tile = tiles
-            .get(pattern)
-            .clone()
-            .put_in_extent(I::default(), output_extent);
+        let tile = tiles.get(pattern).clone().put_in_extent(output_extent);
         copy_extent(&tile, &mut color_lattice, &output_extent);
     }
 
     color_lattice
 }
 
-pub fn color_final_patterns_rgba<I: StatelessIndexer>(
+pub fn color_final_patterns_rgba<I: Clone + Indexer>(
     pattern_lattice: &VecLatticeMap<PatternId>,
     tiles: &PatternTileSet<Rgba<u8>, I>,
 ) -> VecLatticeMap<Rgba<u8>> {
     color_final_patterns(pattern_lattice, tiles, Rgba([0; 4]))
 }
 
-pub fn color_final_patterns_vox<I: StatelessIndexer>(
+pub fn color_final_patterns_vox<I: Clone + Indexer>(
     pattern_lattice: &VecLatticeMap<PatternId>,
     tiles: &PatternTileSet<VoxColor, I>,
 ) -> VecLatticeMap<VoxColor> {
@@ -130,7 +125,7 @@ pub struct GifMaker<I> {
     skip_frames: usize,
 }
 
-impl<I: StatelessIndexer> FrameConsumer for GifMaker<I> {
+impl<I: Clone + Indexer> FrameConsumer for GifMaker<I> {
     fn use_frame(&mut self, slots: &VecLatticeMap<PatternSet>) {
         if self.num_updates % self.skip_frames == 0 {
             let superposition = color_superposition(slots, &self.pattern_tiles);
@@ -146,7 +141,7 @@ impl<I: StatelessIndexer> FrameConsumer for GifMaker<I> {
     }
 }
 
-impl<I: StatelessIndexer> GifMaker<I> {
+impl<I: Indexer> GifMaker<I> {
     pub fn new(
         path: PathBuf,
         pattern_tiles: PatternTileSet<Rgba<u8>, I>,
